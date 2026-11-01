@@ -1,0 +1,12 @@
+<mujoco model="minimal_turtlebot">
+  <include file="turtlebot3_waffle_pi.xml"/>
+
+  <worldbody>
+    <light pos="2 0 2"/>
+
+    <geom name="floor"
+          type="plane"
+          size="3 3 0.1"
+          rgba="0.6 0.6 0.6 1"/>
+  </worldbody>
+</mujoco>

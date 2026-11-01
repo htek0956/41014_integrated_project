@@ -1,5 +1,5 @@
-<mujoco model="TB3-WafflePi scene">
-  <include file="turtlebot3_waffle_pi.xml"/>
+<mujoco model="TB3-Burger scene">
+  <include file="turtlebot3_burger.xml"/>
 
   <statistic center="0.3 0 0.4" extent="1"/>
 
