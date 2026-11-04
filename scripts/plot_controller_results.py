@@ -1,4 +1,4 @@
-"""Combined controller plots and indexed results.
+"""Controller reports, separate PI report and indexed result storage.
 
 Run without arguments for a new headless experiment, or use --input with a saved
 run_data_NNN.npz to replot it. Every save creates a new run folder.
@@ -10,6 +10,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+from plot_pi_results import plot_pi_results
 
 
 RESULTS_FOLDER = Path(__file__).resolve().parent.parent / "figures" / "controller_tracking"
@@ -43,37 +45,33 @@ def controller_metrics(log):
 
 
 def plot_controller_results(log, metrics):
-    """Build one figure. Ground-truth trajectory is compared to the desired track."""
+    """Tracking page: three plots plus a statistics panel, without PI details."""
     times = np.asarray(log["time"])
     poses = np.asarray(log["pose"])
     track = np.asarray(log["reference_path"])
-    wheel = {key: np.asarray(value) for key, value in log["wheel"].items()}
-    wheel_times = wheel["time"]
     settings = log["settings"]
 
-    figure, axes = plt.subplots(5, 2, figsize=(15, 18), layout="constrained")
+    figure, axes = plt.subplots(2, 2, figsize=(13, 9), layout="constrained")
     figure.suptitle(
-        "Paperclip controller diagnostic - ground-truth feedback\n"
+        "Path controller - ground-truth feedback\n"
         f"Reference speed {settings['reference_speed']:g} m/s | "
-        f"LQR dt {settings['control_dt']:g} s | "
-        f"K = {np.array2string(np.asarray(settings['lqr_gain']), precision=3)}",
-        fontsize=14,
+        f"Control dt {settings['control_dt']:g} s | "
+        f"K = {np.array2string(np.asarray(settings['lqr_gain']), precision=3)}"
     )
 
     axis = axes[0, 0]
     axis.plot(track[:, 0], track[:, 1], "--", color="black", label="Desired track")
-    axis.plot(poses[:, 0], poses[:, 1], color="tab:blue", label="Ground-truth motion")
+    axis.plot(poses[:, 0], poses[:, 1], label="Ground-truth motion")
     axis.scatter(*track[0], color="green", label="Start", zorder=5)
     axis.scatter(*track[-1], color="red", marker="x", label="Desired stop", zorder=5)
     axis.scatter(*log["final_pose"][:2], color="tab:orange", marker="+",
-                 label="Final actual position", zorder=6)
+                 label="Final position", zorder=6)
     axis.set(title="Desired track and actual trajectory", xlabel="World x [m]",
              ylabel="World y [m]")
     axis.set_aspect("equal", adjustable="box")
     axis.legend(fontsize=8)
 
     axes[0, 1].axis("off")
-    pi = settings["pi_gains"]
     text = (
         f"Completed: {metrics['completed']}\n"
         f"Simulation duration: {metrics['duration_s']:.2f} s\n"
@@ -81,79 +79,57 @@ def plot_controller_results(log, metrics):
         f"Cross-track RMS: {metrics['cross_track_rms_m']:.4f} m\n"
         f"Cross-track max: {metrics['cross_track_max_abs_m']:.4f} m\n"
         f"Heading RMS: {metrics['heading_rms_deg']:.3f} deg\n"
-        f"Heading max: {metrics['heading_max_abs_deg']:.3f} deg\n\n"
-        f"Torque RMS L/R: {metrics['torque_rms_Nm'][0]:.4f} / "
-        f"{metrics['torque_rms_Nm'][1]:.4f} N m\n"
-        f"Torque clipped L/R: {metrics['torque_clipped_percent'][0]:.2f} / "
-        f"{metrics['torque_clipped_percent'][1]:.2f} %\n"
+        f"Heading max: {metrics['heading_max_abs_deg']:.3f} deg\n"
         f"Body command limited: {metrics['body_command_limited_percent']:.2f} %\n\n"
-        f"Left PI: Kp={pi[0]['kp']:g}, Ki={pi[0]['ki']:g}\n"
-        f"Right PI: Kp={pi[1]['kp']:g}, Ki={pi[1]['ki']:g}\n"
         "Metrics include startup and stopping.\n"
-        "Local cross-track error can omit along-path endpoint error.\n"
-        "Clipping statistics use every physics-step sample."
+        "Cross-track error excludes along-path stopping error.\n"
+        "Dotted vertical line: endpoint stop requested."
     )
-    axes[0, 1].text(0.03, 0.98, text, va="top", fontsize=10, linespacing=1.5)
+    axes[0, 1].text(0.03, 0.95, text, va="top", fontsize=11, linespacing=1.6)
 
     axes[1, 0].plot(times, log["cross_track_error"])
     axes[1, 0].set(title="Signed cross-track error", ylabel="Error [m]")
     axes[1, 1].plot(times, np.rad2deg(log["heading_error"]))
     axes[1, 1].set(title="Wrapped heading error", ylabel="Error [deg]")
 
-    for column, (title, unit) in enumerate((
-        ("Forward body speed", "Speed [m/s]"),
-        ("Body yaw rate", "Yaw rate [rad/s]"),
-    )):
-        axis = axes[2, column]
-        axis.plot(wheel_times, wheel["body_command"][:, column], "--",
-                  label="Requested")
-        axis.plot(wheel_times, wheel["limited_command"][:, column], ":",
-                  label="After command limits")
-        axis.plot(wheel_times, wheel["body_measured"][:, column],
-                  label="Ground-truth measured", linewidth=1)
-        axis.set(title=title, ylabel=unit)
-        axis.legend(fontsize=8)
-
-    for column, name in enumerate(("Left", "Right")):
-        axis = axes[3, column]
-        axis.plot(wheel_times, wheel["target"][:, column], "--", label="Target")
-        axis.plot(wheel_times, wheel["measured"][:, column], label="Encoder")
-        axis.set(title=f"{name} wheel speed", ylabel="Speed [rad/s]")
-        axis.legend(fontsize=8)
-
-        axis = axes[4, column]
-        axis.plot(wheel_times, wheel["raw_torque"][:, column], "--",
-                  label="PI request", linewidth=1)
-        axis.plot(wheel_times, wheel["torque"][:, column],
-                  label="Applied actuator command", linewidth=1)
-        lower, upper = settings["torque_limits"][column]
-        axis.axhline(lower, color="red", linestyle=":", label="Torque limits")
-        axis.axhline(upper, color="red", linestyle=":")
-        # Show applied effort clearly without losing the large unclipped PI
-        # transients. The inset retains the full request range over the run.
-        margin = 0.15 * (upper - lower)
-        axis.set_ylim(lower - margin, upper + margin)
-        inset = axis.inset_axes([0.63, 0.57, 0.34, 0.34])
-        inset.plot(wheel_times, wheel["raw_torque"][:, column], linewidth=0.6)
-        inset.set_title("Full PI request range [N m]", fontsize=7)
-        inset.tick_params(labelsize=6)
-        inset.grid(True, alpha=0.2)
-        axis.set(title=f"{name} wheel actuator effort", ylabel="Torque [N m]")
-        axis.legend(fontsize=8)
-
-    for axis in axes.flat:
-        if axis.axison:
-            axis.grid(True, alpha=0.3)
-
-    for axis in axes[1:].flat:
+    for axis in axes[1]:
         axis.set_xlabel("Simulation time [s]")
+        axis.set_xlim(0, log["duration"])
         axis.axhline(0, color="grey", linewidth=0.5)
         if log["stop_time"] is not None:
-            axis.axvline(log["stop_time"], color="grey", linestyle=":", linewidth=1)
-    # Shared time extent helps relate tracking transients to motor behaviour.
-    for axis in axes[1:].flat:
-        axis.set_xlim(0, log["duration"])
+            axis.axvline(log["stop_time"], color="grey", linestyle=":")
 
+    for axis in (axes[0, 0], *axes[1]):
+        axis.grid(True, alpha=0.3)
+
+    return figure
+
+
+def plot_body_response(log):
+    """Two separate body-motion plots, keeping speed and yaw units distinct."""
+    wheel = {key: np.asarray(value) for key, value in log["wheel"].items()}
+    times = wheel["time"]
+    figure, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True,
+                                layout="constrained")
+    figure.suptitle("Body response - requested motion versus ground truth")
+
+    for column, (axis, title, unit) in enumerate(zip(
+        axes, ("Forward body speed", "Body yaw rate"),
+        ("Speed [m/s]", "Yaw rate [rad/s]"),
+    )):
+        axis.plot(times, wheel["body_command"][:, column], "--",
+                  color="black", label="Requested")
+        axis.plot(times, wheel["limited_command"][:, column], ":",
+                  color="tab:orange", label="After command limits")
+        axis.plot(times, wheel["body_measured"][:, column],
+                  color="tab:blue", label="Ground-truth measured", linewidth=1)
+        axis.set(title=title, ylabel=unit, xlim=(0, log["duration"]))
+        axis.grid(True, alpha=0.3)
+        axis.legend()
+        if log["stop_time"] is not None:
+            axis.axvline(log["stop_time"], color="grey", linestyle=":")
+
+    axes[-1].set_xlabel("Simulation time [s]")
     return figure
 
 
@@ -164,6 +140,8 @@ def save_controller_results(log, show=True):
 
     metrics = controller_metrics(log)
     figure = plot_controller_results(log, metrics)
+    body_figure = plot_body_response(log)
+    pi_figure = plot_pi_results(log, metrics)
 
     RESULTS_FOLDER.mkdir(parents=True, exist_ok=True)
     indices = [
@@ -186,6 +164,10 @@ def save_controller_results(log, show=True):
     image_path = folder / f"controller_overview_{index:03d}.png"
     with image_path.open("xb") as output:
         figure.savefig(output, format="png", dpi=150)
+
+    for report, name in ((body_figure, "body_response"), (pi_figure, "pi_loop")):
+        with (folder / f"{name}_{index:03d}.png").open("xb") as output:
+            report.savefig(output, format="png", dpi=150)
 
     # Plain numeric arrays plus JSON metadata: no pickle required when loading.
     arrays = {
@@ -217,6 +199,8 @@ def save_controller_results(log, show=True):
         plt.show()
     else:
         plt.close(figure)
+        plt.close(body_figure)
+        plt.close(pi_figure)
 
     return image_path
 
@@ -250,4 +234,5 @@ if __name__ == "__main__":
     else:
         log = load_controller_results(args.input)
 
-    save_controller_results(log, show=not args.no_show)
+    if log is not None:
+        save_controller_results(log, show=not args.no_show)

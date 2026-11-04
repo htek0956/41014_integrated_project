@@ -17,6 +17,12 @@ class Robot:
         self.model = mujoco.MjModel.from_xml_path(str(scene_path))
         self.data = mujoco.MjData(self.model)
 
+        self.renderer = mujoco.Renderer(
+            self.model,
+            height=480,
+            width=640,
+        )
+        
         wheel_names = ("wheel_left", "wheel_right")
 
         # Free-joint position and velocity arrays use different indexing.
@@ -52,7 +58,7 @@ class Robot:
 
         # Software wheel-speed target limit from the earlier controller.
         # Torque-actuator ctrlrange is N*m and must NOT be used as a speed limit.
-        self.max_wheel_speed = 15
+        self.max_wheel_speed = 25
         self.max_yaw_rate = max_yaw_rate
 
         # Reuse the selected PI gains. Each wheel stores its own integral.
@@ -72,6 +78,15 @@ class Robot:
         # Passive means main retains control of stepping and update timing.
         if show_viewer:
             self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
+
+            # Follow the robot with the external viewer. This does not change
+            # the robot_camera used by read_camera() for localisation images.
+            with self.viewer.lock():
+                self.viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+                self.viewer.cam.trackbodyid = self.model.body("base").id
+                self.viewer.cam.distance = 2.5
+                self.viewer.cam.azimuth = 135
+                self.viewer.cam.elevation = -30
 
     @property
     def time(self):
@@ -134,8 +149,12 @@ class Robot:
         }
 
     def read_camera(self):
-        """Camera sensing is not needed for the controller-only experiment."""
-        raise NotImplementedError("Read a timestamped camera image.")
+        # Capture at the current simulation state.
+        
+        self.renderer.update_scene(self.data, camera="robot_camera")
+        rgb = self.renderer.render().copy() 
+
+        return {"timestamp": self.time, "rgb": rgb}
 
     def read_lidar(self):
         """LiDAR sensing is not needed for the open-space controller test."""
@@ -234,4 +253,5 @@ class Robot:
         if self.viewer is not None:
             self.viewer.close()
 
+        self.renderer.close()
         self.closed = True

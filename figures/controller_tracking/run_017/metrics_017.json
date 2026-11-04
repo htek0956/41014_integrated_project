@@ -1,0 +1,22 @@
+{
+  "completed": true,
+  "duration_s": 32.769999999994084,
+  "endpoint_error_m": 0.04511451605441678,
+  "cross_track_rms_m": 0.09696469732742355,
+  "cross_track_max_abs_m": 0.5171805600856543,
+  "heading_rms_deg": 8.458656972375696,
+  "heading_max_abs_deg": 58.34821912101887,
+  "wheel_speed_rms_error_rad_s": [
+    2.123998455167826,
+    0.6000522067132903
+  ],
+  "torque_rms_Nm": [
+    0.12980514882319658,
+    0.12540639971585965
+  ],
+  "torque_clipped_percent": [
+    2.386328959414098,
+    1.916386939273726
+  ],
+  "body_command_limited_percent": 3.051571559353067
+}

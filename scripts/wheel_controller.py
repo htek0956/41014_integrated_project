@@ -9,7 +9,7 @@ class WheelPI:
     Set ki=0 for proportional control.
     """
 
-    def __init__(self, torque_limits, kp=1, ki=1):
+    def __init__(self, torque_limits, kp=.25, ki=0.25):
         self.kp = kp
         self.ki = ki
         self.min_torque, self.max_torque = torque_limits

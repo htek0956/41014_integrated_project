@@ -9,9 +9,9 @@ from models import wrap
 class Controller:
     """Outer estimated-state tracker. Wheel PI belongs to the robot interface."""
 
-    def __init__(self, speed, dt):
+    def __init__(self, speed, dt, verbose=True):
                
-        self.K_lqr = calculate_lqr_gain(speed, 0.0, dt)  # Straight path
+        self.K_lqr = calculate_lqr_gain(speed, 0.0, dt, verbose=verbose)  # Straight path
     
 
     def update(self, estimate, reference,  dt):
@@ -21,6 +21,16 @@ class Controller:
         Handle alignment and stopping separately from moving-path tracking.
         dt is the elapsed outer-control interval in seconds.
         """
+        # A stationary turn is outside the moving-path LQR model. Use only
+        # wrapped heading feedback, with a modest turn-rate limit [rad/s].
+        mode = reference.get("mode")
+        if reference["stop"] or mode == "BRAKE":
+            return 0.0, 0.0
+
+        if mode == "TURN":
+            heading_error = wrap(reference["heading"] - estimate[2])
+            return 0.0, float(np.clip(2.0 * heading_error, -0.8, 0.8))
+
         e_y, e_theta = tracking_errors(estimate, reference)
 
         e = np.array([[e_y],
@@ -61,7 +71,7 @@ def tracking_errors(pose, reference):
     return float(cross_track_error), float(heading_error)
 
 
-def calculate_lqr_gain(v, kappa, Ts, q_e_y=0.02, q_e_theta=0.1, r_d_omega=0.26):
+def calculate_lqr_gain(v, kappa, Ts, q_e_y=0.02, q_e_theta=0.1, r_d_omega=0.26, verbose=True):
 
     # Discrete linearised path-following error model.
     # State e = [e_y, e_theta], input d_omega = omega - v*kappa. Returns (Ad, Bd).
@@ -100,7 +110,8 @@ def calculate_lqr_gain(v, kappa, Ts, q_e_y=0.02, q_e_theta=0.1, r_d_omega=0.26):
     # Closed-loop eigenvalues: eig(Ad - Bd * K)
     poles = np.linalg.eigvals(A - B @ K_lqr)
 
-    print(f"K_lqr: {K_lqr}")
-    print(f"Design-model CL eigenvalue magnitudes: {np.abs(poles)}")
+    if verbose:
+        print(f"K_lqr: {K_lqr}")
+        print(f"Design-model CL eigenvalue magnitudes: {np.abs(poles)}")
 
     return K_lqr

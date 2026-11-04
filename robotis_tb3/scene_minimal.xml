@@ -1,12 +1,58 @@
-<mujoco model="minimal_turtlebot">
-  <include file="turtlebot3_waffle_pi.xml"/>
+<mujoco model="hallway_scene">
 
+  <!-- Loads the robot, camera, checkerboard floor and lighting. -->
+  <include file="scene_turtlebot3_waffle_pi.xml"/>
+
+  <asset>
+    <texture name="aruco_0_texture"
+             type="2d"
+             file="../assets/markers/0.png"/>
+
+    <material name="aruco_0_material"
+              texture="aruco_0_texture"
+              texuniform="false"
+              texrepeat="1 1"
+              rgba="1 1 1 1"
+              specular="0"
+              shininess="0"/>
+  </asset>
+
+  <!-- Additional scenery. -->
   <worldbody>
-    <light pos="2 0 2"/>
+    <geom name="hallway_left"
+          type="box"
+          pos="3 0.8 0.5"
+          size="3 0.05 0.5"
+          rgba="0.75 0.75 0.8 1"/>
 
-    <geom name="floor"
-          type="plane"
-          size="3 3 0.1"
-          rgba="0.6 0.6 0.6 1"/>
+    <geom name="hallway_right"
+          type="box"
+          pos="3 -0.8 0.5"
+          size="3 0.05 0.5"
+          rgba="0.8 0.75 0.65 1"/>
+
+    <!-- Left wall inner face is y=0.75 m. Panels sit just inside it.
+         Local X runs along the hallway; local Y points up; local +Z
+         faces into the hallway (-world Y). All sizes are half-extents. -->
+    <geom name="marker_0_backing"
+          type="box"
+          pos="3 0.748 0.3"
+          xyaxes="1 0 0  0 0 1"
+          size="0.12 0.12 0.001"
+          rgba="1 1 1 1"
+          contype="0"
+          conaffinity="0"/>
+
+    <!-- ID 0: 0.20 m outer black square, excluding the white backing.
+         Use 0.20 m as the marker side length for camera pose estimation. -->
+    <geom name="marker_0"
+          type="box"
+          pos="3 0.746 0.3"
+          xyaxes="1 0 0  0 0 1"
+          size="0.10 0.10 0.0005"
+          material="aruco_0_material"
+          contype="0"
+          conaffinity="0"/>
   </worldbody>
+
 </mujoco>

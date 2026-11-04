@@ -61,6 +61,7 @@
         <geom quat="0.707388 0.706825 0 0" mesh="right_tire" material="grey" class="visual"/>
         <geom quat="0.707388 0.706825 0 0" mesh="right_tire" class="collision"/>
       </body>
+      <camera name="robot_camera" pos="0.1 0 0.2" xyaxes="0 -1 0  0 0 1" fovy="48.8"/>
     </body>
   </worldbody>
 

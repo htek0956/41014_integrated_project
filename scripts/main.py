@@ -1,4 +1,4 @@
-"""Paperclip controller diagnostic using ground-truth feedback, not the EKF.
+"""Hallway controller diagnostic using ground-truth feedback, not the EKF.
 
 Run scripts/main.py for the viewer, or add --headless to run without animation.
 Ground truth is deliberately used to isolate controller and actuator behaviour.
@@ -11,15 +11,21 @@ import time
 import numpy as np
 
 from controller import Controller, tracking_errors
-from paperclip_path import PaperclipReference
+from hallway_path import HallwayReference
 from robot import Robot
+import cv2
 
 
 # Experiment settings. Geometry and controller gains stay with their owners.
+# Disable result collection, terminal summaries, and saved plots/data.
+# The simulation and live camera/viewer windows still run normally.
+LOG_RESULTS = False
+
+
 # Outer tracking-controller interval [s].
 # Initial value from Assignment 3; validate it on this robot.
 # This is not the physics timestep or necessarily the wheel PI interval.
-CONTROL_DT = 0.1
+CONTROL_DT = 0.01
 
 
 # Nominal path speed [m/s]. Start slowly while validating tracking.
@@ -50,66 +56,70 @@ INITIAL_COVARIANCE = np.diag([
     np.deg2rad(10.0)**2,
 ])
 
-
 def main(show_viewer=True, max_time=None):
-    """Run the diagnostic and return time-aligned outer-control samples."""
+    """Run the diagnostic; return recorded samples, or None without logging."""
+    time_since_viewer_update = 0
     scene = (
         Path(__file__).resolve().parent.parent
         / "robotis_tb3"
-        / "scene_turtlebot3_waffle_pi.xml"
+        / "scene_minimal.xml"
     )
 
-    paperclip = PaperclipReference(REFERENCE_SPEED)
-    controller = Controller(REFERENCE_SPEED, CONTROL_DT)
+    path = HallwayReference(REFERENCE_SPEED)
+    controller = Controller(REFERENCE_SPEED, CONTROL_DT, verbose=LOG_RESULTS)
 
     # Allow substantial tracking delay, but do not run forever if a segment
     # transition or stopping condition is never reached. All times are sim time.
     if max_time is None:
-        max_time = 2 * paperclip.total_length / REFERENCE_SPEED + 10
+        max_time = 2 * path.total_length / REFERENCE_SPEED + 10
 
     if max_time <= 0 or CONTROL_DT <= 0:
         raise ValueError("Run duration and control interval must be positive.")
 
-    log = {name: [] for name in (
-        "time", "pose", "reference", "cross_track_error", "heading_error",
-        "command", "limited_command",
-    )}
+    log = None
+    if LOG_RESULTS:
+        log = {name: [] for name in (
+            "time", "pose", "reference", "cross_track_error", "heading_error",
+            "command", "limited_command",
+        )}
 
-    # Keep wheel/effort samples at physics rate, rather than only at LQR rate.
-    # Each row describes the state and newly applied torque before mj_step.
-    log["wheel"] = {name: [] for name in (
-        "time", "target", "measured", "torque", "raw_torque",
-        "body_command", "limited_command", "body_measured",
-    )}
-    log["reference_path"] = np.array([
-        [point["x"], point["y"]]
-        for point in (
-            paperclip.reference_at(distance)
-            for distance in np.linspace(0, paperclip.total_length, 1000)
-        )
-    ])
+        # Keep wheel/effort samples at physics rate, rather than only at LQR rate.
+        # Each row describes the state and newly applied torque before mj_step.
+        log["wheel"] = {name: [] for name in (
+            "time", "target", "measured", "torque", "raw_torque",
+            "body_command", "limited_command", "body_measured",
+        )}
+        log["reference_path"] = np.array([
+            [point["x"], point["y"]]
+            for point in (
+                path.reference_at(distance)
+                for distance in np.linspace(0, path.total_length, 1000)
+            )
+        ])
 
     robot = Robot(scene, max_yaw_rate=OMEGA_MAX, show_viewer=show_viewer)
 
-    start_pos = paperclip.start_position + np.array([0.5, 0.5])
-    start_heading = paperclip.start_heading + np.deg2rad(10.0)
+    start_pos = path.start_position.copy()
+    start_heading = path.start_heading
 
     try:
         robot.reset((*start_pos, start_heading))
 
-        log["settings"] = {
-            "control_dt": CONTROL_DT,
-            "physics_dt": robot.physics_dt,
-            "reference_speed": REFERENCE_SPEED,
-            "lqr_gain": controller.K_lqr.tolist(),
-            "pi_gains": [
-                {"kp": wheel.kp, "ki": wheel.ki}
-                for wheel in robot.wheel_controllers
-            ],
-            "torque_limits": robot.model.actuator_ctrlrange[robot.actuators].tolist(),
-            "max_wheel_speed": robot.max_wheel_speed,
-            "max_yaw_rate": robot.max_yaw_rate,
-        }
+        if LOG_RESULTS:
+            log["settings"] = {
+                "control_dt": CONTROL_DT,
+                "physics_dt": robot.physics_dt,
+                "reference_speed": REFERENCE_SPEED,
+                "path": "hallway_out_and_back",
+                "lqr_gain": controller.K_lqr.tolist(),
+                "pi_gains": [
+                    {"kp": wheel.kp, "ki": wheel.ki}
+                    for wheel in robot.wheel_controllers
+                ],
+                "torque_limits": robot.model.actuator_ctrlrange[robot.actuators].tolist(),
+                "max_wheel_speed": robot.max_wheel_speed,
+                "max_yaw_rate": robot.max_yaw_rate,
+            }
 
         command = (0.0, 0.0)
         next_control_time = 0.0
@@ -120,14 +130,15 @@ def main(show_viewer=True, max_time=None):
         # per physics step would accumulate timing overhead on Windows.
         wall_start = time.perf_counter()
 
-        print("Controller-only diagnostic: ground-truth pose feedback.")
+        if LOG_RESULTS:
+            print("Controller-only diagnostic: ground-truth pose feedback.")
 
         while robot.running() and robot.time < max_time:
             if robot.time + 1e-10 >= next_control_time:
                 # Later the operational pipeline will supply an EKF estimate.
                 # For this diagnostic, both reference and controller use truth.
                 pose = robot.get_truth()
-                reference = paperclip.update(pose)
+                reference = path.update(pose, robot.get_truth_velocity())
 
                 if reference["stop"]:
                     command = (0.0, 0.0)
@@ -138,13 +149,14 @@ def main(show_viewer=True, max_time=None):
                         pose, reference, CONTROL_DT
                     )
 
-                cross_track, heading_error = tracking_errors(pose, reference)
-                log["time"].append(robot.time)
-                log["pose"].append(pose)
-                log["reference"].append(reference.copy())
-                log["cross_track_error"].append(cross_track)
-                log["heading_error"].append(heading_error)
-                log["command"].append(command)
+                if LOG_RESULTS:
+                    cross_track, heading_error = tracking_errors(pose, reference)
+                    log["time"].append(robot.time)
+                    log["pose"].append(pose)
+                    log["reference"].append(reference.copy())
+                    log["cross_track_error"].append(cross_track)
+                    log["heading_error"].append(heading_error)
+                    log["command"].append(command)
 
                 next_control_time += CONTROL_DT
                 control_updated = True
@@ -154,23 +166,39 @@ def main(show_viewer=True, max_time=None):
             # Inner wheel PI runs every physics step. Hold the outer body
             # command between LQR updates; apply torque before stepping physics.
             limited_command = robot.apply_body_command(command, robot.physics_dt)
-            if control_updated:
+            if LOG_RESULTS and control_updated:
                 log["limited_command"].append(limited_command)
 
-            encoders = robot.read_encoders()
-            wheel_log = log["wheel"]
-            wheel_log["time"].append(robot.time)
-            wheel_log["target"].append(robot.wheel_targets.copy())
-            wheel_log["measured"].append([
-                encoders["left_speed"], encoders["right_speed"]
-            ])
-            wheel_log["torque"].append(robot.wheel_torques.copy())
-            wheel_log["raw_torque"].append([
-                wheel.raw_torque for wheel in robot.wheel_controllers
-            ])
-            wheel_log["body_command"].append(command)
-            wheel_log["limited_command"].append(limited_command)
-            wheel_log["body_measured"].append(robot.get_truth_velocity())
+            if show_viewer and robot.time - time_since_viewer_update > 0.2:
+                camera = robot.read_camera()
+                rgb = camera["rgb"]
+            
+                bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                cv2.imshow("Robot camera", bgr)
+
+                # Process window events so the image updates.
+                cv2.waitKey(1)
+
+                time_since_viewer_update = robot.time
+
+
+
+
+            if LOG_RESULTS:
+                encoders = robot.read_encoders()
+                wheel_log = log["wheel"]
+                wheel_log["time"].append(robot.time)
+                wheel_log["target"].append(robot.wheel_targets.copy())
+                wheel_log["measured"].append([
+                    encoders["left_speed"], encoders["right_speed"]
+                ])
+                wheel_log["torque"].append(robot.wheel_torques.copy())
+                wheel_log["raw_torque"].append([
+                    wheel.raw_torque for wheel in robot.wheel_controllers
+                ])
+                wheel_log["body_command"].append(command)
+                wheel_log["limited_command"].append(limited_command)
+                wheel_log["body_measured"].append(robot.get_truth_velocity())
 
             robot.step()
 
@@ -189,18 +217,21 @@ def main(show_viewer=True, max_time=None):
             if stop_time is not None and robot.time - stop_time >= 2.0:
                 break
 
+        if not LOG_RESULTS:
+            return None
+
         final_pose = robot.get_truth()
         endpoint_error = float(np.linalg.norm(
-            np.asarray(final_pose[:2]) - paperclip.end_position
+            np.asarray(final_pose[:2]) - path.end_position
         ))
 
-        log["completed"] = paperclip.finished
+        log["completed"] = path.finished
         log["final_pose"] = final_pose
         log["endpoint_error"] = endpoint_error
         log["stop_time"] = stop_time
         log["duration"] = robot.time
 
-        if paperclip.finished:
+        if path.finished:
             print("Reached the final path endpoint.")
         elif robot.time >= max_time:
             print("Simulation time limit reached before path completion.")
@@ -218,6 +249,7 @@ def main(show_viewer=True, max_time=None):
 
     finally:
         robot.close()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
@@ -233,6 +265,7 @@ if __name__ == "__main__":
 
     log = main(show_viewer=not args.headless, max_time=args.max_time)
 
-    from plot_controller_results import save_controller_results
+    if log is not None:
+        from plot_controller_results import save_controller_results
 
-    save_controller_results(log, show=not args.headless)
+        save_controller_results(log, show=not args.headless)

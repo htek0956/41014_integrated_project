@@ -2,9 +2,20 @@
 
 Application code is in `scripts/`. Separate diagnostic experiments are in `testing/`.
 
-`scripts/main.py` runs the paperclip controller diagnostic using ground-truth
+`scripts/main.py` runs the hallway out-and-back controller diagnostic using ground-truth
 pose feedback. This isolates tracking and actuation; it is not the assessed
 estimated-state pipeline. Experiment settings are at the top of `main.py`.
+
+`LOG_RESULTS = False` in `scripts/main.py` disables result collection, terminal
+diagnostics, and plot/data output. Live simulation and camera windows still work.
+Set it to `True` to record results and save the reports described below.
+
+The route in `scripts/hallway_path.py` starts at `(0.3, 0)` facing +X, drives
+to `(5.7, 0)`, brakes, turns 180 degrees in place, and returns to the start.
+It uses `robotis_tb3/scene_minimal.xml`. The external viewer follows the robot;
+the onboard camera still supplies separate RGB images. `--headless` disables
+both display windows. The original paperclip reference remains available in
+`scripts/paperclip_path.py`.
 
 From the project folder:
 
@@ -16,10 +27,19 @@ Add `--headless` to skip the viewer, or `--max-time 10` to limit simulated secon
 Wheel PI runs every physics step; LQR runs at `CONTROL_DT`. The simulation
 continues for two seconds after the endpoint stop request, then prints results.
 
-Each run also saves one combined controller figure, numeric `.npz` data and
-JSON metrics under `figures/controller_tracking/run_NNN/`. New run indices
-preserve previous results. Plots include desired/actual path, cross-track and
-heading errors, body speed/yaw rate, wheel speeds and requested/applied torque.
+Each run saves three report images, numeric `.npz` data and JSON metrics under
+`figures/controller_tracking/run_NNN/`. New run indices preserve previous results.
+
+- `controller_overview_NNN.png`: desired/actual path, cross-track error,
+  heading error and controller statistics (three plots plus text).
+- `body_response_NNN.png`: separate forward-speed and yaw-rate comparisons,
+  showing requested, limited and ground-truth motion.
+- `pi_loop_NNN.png`: three overlaid left/right plots for wheel speeds,
+  speed errors and applied torque. Clipping markers and numeric request peaks
+  distinguish applied effort from the unrestricted PI request.
+
+`scripts/plot_controller_results.py` creates the controller reports and handles
+indexed saves. `scripts/plot_pi_results.py` contains the PI-only figure function.
 Wheel effort is recorded every physics step to capture PI transients.
 
 To replot saved data without simulating again:
