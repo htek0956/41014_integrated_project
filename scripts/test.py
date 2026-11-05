@@ -12,8 +12,8 @@ actuators = [model.actuator(name).id for name in ("wheel_left", "wheel_right")]
 
 with mujoco.viewer.launch_passive(model, data) as viewer:
     while viewer.is_running():
-        # Drive forward for 2 seconds, then stop and remain at rest.
-        data.ctrl[actuators] = 5.0 if data.time < 5.0 else 0.0  # rad/s
+
+        data.ctrl[actuators] = 5.0 if data.time < 5.0 else 0.0
         mujoco.mj_step(model, data)
         viewer.sync()
         time.sleep(model.opt.timestep)

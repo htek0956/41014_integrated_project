@@ -1,9 +1,3 @@
-"""Controller reports, separate PI report and indexed result storage.
-
-Run without arguments for a new headless experiment, or use --input with a saved
-run_data_NNN.npz to replot it. Every save creates a new run folder.
-"""
-
 import argparse
 import json
 from pathlib import Path
@@ -18,7 +12,7 @@ RESULTS_FOLDER = Path(__file__).resolve().parent.parent / "figures" / "controlle
 
 
 def controller_metrics(log):
-    """Calculate full-run metrics, including startup and stopping."""
+
     cross_track = np.asarray(log["cross_track_error"])
     heading = np.rad2deg(log["heading_error"])
     wheel = {key: np.asarray(value) for key, value in log["wheel"].items()}
@@ -45,7 +39,7 @@ def controller_metrics(log):
 
 
 def plot_controller_results(log, metrics):
-    """Tracking page: three plots plus a statistics panel, without PI details."""
+
     times = np.asarray(log["time"])
     poses = np.asarray(log["pose"])
     track = np.asarray(log["reference_path"])
@@ -106,7 +100,7 @@ def plot_controller_results(log, metrics):
 
 
 def plot_body_response(log):
-    """Two separate body-motion plots, keeping speed and yaw units distinct."""
+
     wheel = {key: np.asarray(value) for key, value in log["wheel"].items()}
     times = wheel["time"]
     figure, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True,
@@ -134,7 +128,7 @@ def plot_body_response(log):
 
 
 def save_controller_results(log, show=True):
-    """Save image, numeric data and metrics without overwriting previous runs."""
+
     if not log["time"] or not log["wheel"]["time"]:
         raise ValueError("There are no controller samples to plot.")
 
@@ -151,8 +145,7 @@ def save_controller_results(log, show=True):
     ]
     index = max(indices, default=0) + 1
 
-    # Exclusive directory creation reserves a new index even if two runs save
-    # simultaneously. Existing folders and images are never replaced.
+
     while True:
         folder = RESULTS_FOLDER / f"run_{index:03d}"
         try:
@@ -169,7 +162,7 @@ def save_controller_results(log, show=True):
         with (folder / f"{name}_{index:03d}.png").open("xb") as output:
             report.savefig(output, format="png", dpi=150)
 
-    # Plain numeric arrays plus JSON metadata: no pickle required when loading.
+
     arrays = {
         key: np.asarray(log[key]) for key in (
             "time", "pose", "cross_track_error", "heading_error",
@@ -206,7 +199,7 @@ def save_controller_results(log, show=True):
 
 
 def load_controller_results(path):
-    """Read a locally saved numeric run archive for plotting again."""
+
     with np.load(path, allow_pickle=False) as saved:
         log = json.loads(str(saved["metadata"]))
         log["wheel"] = {}
@@ -216,7 +209,7 @@ def load_controller_results(path):
             elif name != "metadata":
                 log[name] = saved[name].copy()
 
-    # Save/plot uses list emptiness checks for the outer sample lists.
+
     log["time"] = log["time"].tolist()
     log["wheel"]["time"] = log["wheel"]["time"].tolist()
     return log

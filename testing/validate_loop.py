@@ -1,9 +1,3 @@
-"""Repeatable ground-truth navigation experiment; checks actual wall contacts.
-
-Run from the project root. Reports and plots go to a new indexed folder so
-previous experiment results are preserved. No controller gains are changed.
-"""
-
 import argparse
 import json
 from pathlib import Path

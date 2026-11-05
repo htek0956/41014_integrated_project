@@ -1,6 +1,6 @@
 <mujoco model="hallway_scene">
 
-  <!-- Loads the robot, camera, checkerboard floor and lighting. -->
+
   <include file="scene_turtlebot3_waffle_pi.xml"/>
 
   <asset>
@@ -17,7 +17,7 @@
               shininess="0"/>
   </asset>
 
-  <!-- Additional scenery. -->
+
   <worldbody>
     <geom name="hallway_left"
           type="box"
@@ -31,9 +31,7 @@
           size="3 0.05 0.5"
           rgba="0.8 0.75 0.65 1"/>
 
-    <!-- Left wall inner face is y=0.75 m. Panels sit just inside it.
-         Local X runs along the hallway; local Y points up; local +Z
-         faces into the hallway (-world Y). All sizes are half-extents. -->
+
     <geom name="marker_0_backing"
           type="box"
           pos="3 0.748 0.3"
@@ -43,8 +41,7 @@
           contype="0"
           conaffinity="0"/>
 
-    <!-- ID 0: 0.20 m outer black square, excluding the white backing.
-         Use 0.20 m as the marker side length for camera pose estimation. -->
+
     <geom name="marker_0"
           type="box"
           pos="3 0.746 0.3"

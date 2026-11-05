@@ -1,10 +1,3 @@
-"""Test a smooth yaw-rate ramp, two-second hold, and ramp back to rest.
-
-Run from the project folder: python testing/motor_control_loop/rotation_test.py
-Runs straight to the plots; use --viewer to watch the robot as well.
-Simulator truth is logged only for this diagnostic experiment.
-"""
-
 import argparse
 from contextlib import nullcontext
 from pathlib import Path
@@ -16,8 +9,7 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-# Direct execution puts this test folder on the import path. Add the root so
-# this experiment can reuse the same wheel controller as the future system.
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if not __package__:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -30,29 +22,28 @@ else:
     from plot_wheel_logs import next_run_index, plot_rotation_logs, plot_wheel_logs, plot_wheel_slip
 
 
-WHEEL_RADIUS = 0.033  # metres
-WHEEL_BASE = 0.288  # metres between the two drive wheels
+WHEEL_RADIUS = 0.033
+WHEEL_BASE = 0.288
 
-# Selected PI gains: Kp=0.4 and Ki=0.5. Keep the master/ratio tuning style.
-# I_RATIO is Ki/Kp; set it to zero for a P-only comparison.
+
 MASTER_GAIN = 1
 I_RATIO = 1
 
 KP = MASTER_GAIN
 KI = MASTER_GAIN * I_RATIO
 
-# Positive body yaw is counterclockwise; all times are simulated seconds.
-MAX_YAW_RATE = 0.5  # body rad/s, NOT wheel speed
+
+MAX_YAW_RATE = 0.5
 RAMP_START = 1.0
 RAMP_DURATION = 2.0
 HOLD_DURATION = 2.0
 RAMP_DOWN_START = RAMP_START + RAMP_DURATION + HOLD_DURATION
 RAMP_END = RAMP_DOWN_START + RAMP_DURATION
-TEST_DURATION = RAMP_END + 2.0  # Observe residual motion after returning to zero.
+TEST_DURATION = RAMP_END + 2.0
 
 
 def yaw_target(sim_time):
-    """Smoothly rise, hold, then return to zero without reversing direction."""
+
     if sim_time < RAMP_START:
         return 0.0
 
@@ -71,23 +62,22 @@ def yaw_target(sim_time):
 
 
 def wheel_targets(sim_time):
-    """Zero forward speed: equal opposite wheel speeds, in wheel rad/s."""
+
     speed = yaw_target(sim_time) * WHEEL_BASE / (2 * WHEEL_RADIUS)
     return -speed, speed
 
 def run_rotation_test(show_viewer=False, kp=KP, ki=KI):
-    """Return measurement lists plus the PI settings used for this run."""
+
     scene = PROJECT_ROOT / "robotis_tb3" / "scene_turtlebot3_waffle_pi.xml"
     model = mujoco.MjModel.from_xml_path(str(scene))
     data = mujoco.MjData(model)
     wheel_names = ("wheel_left", "wheel_right")
     actuators = [model.actuator(name).id for name in wheel_names]
-    # Joint position and velocity have different indices for a free-base robot.
+
     position_indices = [int(model.joint(name).qposadr[0]) for name in wheel_names]
     velocity_indices = [int(model.joint(name).dofadr[0]) for name in wheel_names]
 
-    # Each wheel must remember its own speed error. Match the software limits
-    # to the motor actuator limits, avoiding hidden additional XML clipping.
+
     wheel_controllers = [
         WheelPI(kp, ki, model.actuator_ctrlrange[actuator])
         for actuator in actuators
@@ -101,8 +91,7 @@ def run_rotation_test(show_viewer=False, kp=KP, ki=KI):
         "ground_forward_speed", "ground_yaw_rate",
     )}
 
-    # Keep the actual run settings with its data, so plots don't accidentally
-    # show different gains after we edit the defaults or compare older logs.
+
     log["pi_gains"] = {"kp": float(kp), "ki": float(ki)}
 
     viewer_context = mujoco.viewer.launch_passive(model, data) if show_viewer else nullcontext(None)
@@ -114,23 +103,21 @@ def run_rotation_test(show_viewer=False, kp=KP, ki=KI):
             frame_start = time.perf_counter()
             frame_sim_start = data.time
 
-            # Refresh the target every physics step, including during the ramp.
-            # Only the viewer refresh is grouped into batches of ten steps.
+
             for _ in range(10):
                 if data.time >= TEST_DURATION:
                     break
 
                 targets = wheel_targets(data.time)
 
-                # The reference is still wheel speed in rad/s. Only the PI
-                # output goes to data.ctrl, which now expects torque in N*m.
+
                 torques = [
                     controller.update(target, float(data.qvel[velocity]), dt)
                     for controller, target, velocity in zip(wheel_controllers, targets, velocity_indices)
                 ]
                 data.ctrl[actuators] = torques
 
-                # Values in each row describe the same instant, before stepping.
+
                 log["time"].append(float(data.time))
                 for wheel, target, position, velocity in zip(("left", "right"), targets, position_indices, velocity_indices):
                     log[f"{wheel}_target"].append(target)
@@ -150,9 +137,7 @@ def run_rotation_test(show_viewer=False, kp=KP, ki=KI):
                     2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz)
                 )))
 
-                # Diagnostic truth only: project world motion along the robot's
-                # forward direction. Use velocity directly, avoiding noisy
-                # differences between consecutive position samples.
+
                 heading = log["heading"][-1]
                 forward_speed = (
                     data.qvel[0] * np.cos(heading)
@@ -160,8 +145,7 @@ def run_rotation_test(show_viewer=False, kp=KP, ki=KI):
                 )
                 log["ground_forward_speed"].append(float(forward_speed))
 
-                # MuJoCo stores free-joint angular velocity in the body frame.
-                # Rotate it to world coordinates before taking the turn rate.
+
                 world_angular_velocity = np.zeros(3)
                 mujoco.mju_rotVecQuat(world_angular_velocity, data.qvel[3:6], data.qpos[3:7])
                 log["ground_yaw_rate"].append(float(world_angular_velocity[2]))
@@ -170,7 +154,7 @@ def run_rotation_test(show_viewer=False, kp=KP, ki=KI):
 
             if viewer is not None:
                 viewer.sync()
-                # Pace the viewer using simulated time, not a fixed wall-time run.
+
                 time.sleep(max(0.0, data.time - frame_sim_start - (time.perf_counter() - frame_start)))
 
     return log
@@ -186,7 +170,7 @@ def main():
     if not log["time"]:
         return
 
-    # Save a matched graph set without overwriting previous runs.
+
     run_index = next_run_index()
     plot_wheel_logs(log, run_index=run_index)
     plot_rotation_logs(log, WHEEL_RADIUS, WHEEL_BASE, run_index=run_index)

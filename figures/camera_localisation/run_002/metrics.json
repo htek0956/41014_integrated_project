@@ -1,0 +1,38 @@
+{
+  "samples": 152,
+  "valid_samples": 147,
+  "valid_percent": 96.71052631578948,
+  "single_tag_samples": 104,
+  "multi_tag_samples": 43,
+  "maximum_tags_used": 3,
+  "frames_using_every_detected_tag": 132,
+  "position_rms_m": 0.12954278448223117,
+  "position_max_m": 0.7370541763792102,
+  "heading_rms_deg": 2.1514578328471186,
+  "heading_max_deg": 12.377985988967362,
+  "mean_reprojection_rms_px": 0.5283616039503798,
+  "failures": [
+    {
+      "progress_m": 1.0,
+      "reason": "No known readable tags"
+    },
+    {
+      "progress_m": 3.0,
+      "reason": "No known readable tags"
+    },
+    {
+      "progress_m": 5.25,
+      "reason": "No known readable tags"
+    },
+    {
+      "progress_m": 7.25,
+      "reason": "No known readable tags"
+    },
+    {
+      "progress_m": 16.75,
+      "reason": "No known readable tags"
+    }
+  ],
+  "evaluation": "Ideal rendered images at route samples, not a noisy EKF consistency test",
+  "covariance": "Uncalibrated approximate joint-PnP covariance; validate before use as EKF R"
+}

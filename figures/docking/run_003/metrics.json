@@ -1,0 +1,18 @@
+{
+  "lap_completed": true,
+  "docked": true,
+  "dock_mode": "DOCKED",
+  "duration": 112.6319999999189,
+  "docking_duration_s": 38.901999999909336,
+  "endpoint_error": 0.016710207964410778,
+  "obstacle_contact_steps": 10939,
+  "final_pose": [
+    1.2610709640955262,
+    -0.25326891073676894,
+    -1.5457580364127028
+  ],
+  "final_body_velocity": [
+    1.5602396673364725e-06,
+    -0.00017958382448969473
+  ]
+}

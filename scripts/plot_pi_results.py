@@ -1,15 +1,9 @@
-"""Wheel PI report: three overlaid plots, separate from path-controller plots."""
-
 import matplotlib.pyplot as plt
 import numpy as np
 
 
 def plot_pi_results(log, metrics):
-    """Compare left/right speed, speed error and applied torque at physics rate.
 
-    Applied effort is plotted on its actual torque scale. Clipped requests are
-    marked at the applied value; raw request peaks are reported numerically.
-    """
     wheel = {key: np.asarray(value) for key, value in log["wheel"].items()}
     times = wheel["time"]
     settings = log["settings"]
@@ -48,7 +42,7 @@ def plot_pi_results(log, metrics):
                         color=color, marker="x", s=14, label=f"{name} clipped")
 
         lower, upper = settings["torque_limits"][column]
-        # Distinct styles also support different left/right torque limits.
+
         for limit in (lower, upper):
             axes[2].axhline(limit, color=color, linestyle=":", linewidth=1)
 

@@ -1,0 +1,11 @@
+{
+  "mode": "actual simulated motion, including docking",
+  "samples": 469,
+  "valid_samples": 469,
+  "valid_percent": 100.0,
+  "position_rms_m": 0.01140789371705299,
+  "position_max_m": 0.1328416860742204,
+  "heading_rms_deg": 0.18461080201887106,
+  "multi_tag_samples": 356,
+  "docked": true
+}

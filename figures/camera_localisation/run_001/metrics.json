@@ -1,0 +1,50 @@
+{
+  "samples": 152,
+  "valid_samples": 144,
+  "valid_percent": 94.73684210526316,
+  "single_tag_samples": 102,
+  "multi_tag_samples": 42,
+  "maximum_tags_used": 3,
+  "frames_using_every_detected_tag": 128,
+  "position_rms_m": 0.1490560262250383,
+  "position_max_m": 0.7601559753267029,
+  "heading_rms_deg": 2.55298731443901,
+  "heading_max_deg": 12.866747507352668,
+  "mean_reprojection_rms_px": 0.30497210242646955,
+  "failures": [
+    {
+      "progress_m": 1.0,
+      "reason": "No known readable tags"
+    },
+    {
+      "progress_m": 3.0,
+      "reason": "No known readable tags"
+    },
+    {
+      "progress_m": 5.25,
+      "reason": "No known readable tags"
+    },
+    {
+      "progress_m": 7.25,
+      "reason": "No known readable tags"
+    },
+    {
+      "progress_m": 16.75,
+      "reason": "No known readable tags"
+    },
+    {
+      "progress_m": 27.75,
+      "reason": "Pose inconsistent with planar robot mounting"
+    },
+    {
+      "progress_m": 28.0,
+      "reason": "Pose inconsistent with planar robot mounting"
+    },
+    {
+      "progress_m": 32.0,
+      "reason": "Pose inconsistent with planar robot mounting"
+    }
+  ],
+  "evaluation": "Ideal rendered images at route samples, not a noisy EKF consistency test",
+  "covariance": "Uncalibrated approximate joint-PnP covariance; validate before use as EKF R"
+}

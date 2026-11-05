@@ -1,0 +1,33 @@
+{
+  "dictionary": "DICT_4X4_250",
+  "marker_id": 0,
+  "marker_side_length_m": 0.2,
+  "position_world_m": [
+    1.275,
+    -0.6765,
+    0.2
+  ],
+  "normal_world": [
+    0,
+    1,
+    0
+  ],
+  "x_axis_world": [
+    -1,
+    0,
+    0
+  ],
+  "y_axis_world": [
+    0,
+    0,
+    1
+  ],
+  "desired_camera_depth_m": 0.314,
+  "camera_forward_offset_m": 0.1,
+  "target_base_pose": [
+    1.275,
+    -0.2625,
+    -1.5707963267948966
+  ],
+  "charging_model": "passive physical contacts; camera-position stop; no battery simulation"
+}

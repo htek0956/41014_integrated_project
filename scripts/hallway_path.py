@@ -1,5 +1,3 @@
-"""Drive down the hallway, stop, turn in place, and return along its centre."""
-
 import math
 
 import numpy as np
@@ -8,11 +6,7 @@ from models import wrap
 
 
 class HallwayReference:
-    """World-frame metres/radians; +X outbound, -X on the return leg.
 
-    The scene walls extend from x=0 to x=6. Leave 0.3 m at either end
-    for the robot footprint. A turn in place needs no curved path geometry.
-    """
 
     def __init__(self, speed):
         if speed <= 0:
@@ -26,11 +20,11 @@ class HallwayReference:
         self.leg_length = float(self.turn_position[0] - self.start_position[0])
         self.total_length = 2 * self.leg_length
 
-        self.arrival_tolerance = 0.03  # Along-path distance [m].
-        self.deceleration = 0.3  # Reference braking envelope [m/s^2].
+        self.arrival_tolerance = 0.03
+        self.deceleration = 0.3
         self.heading_tolerance = math.radians(1.0)
-        self.stopped_speed = 0.02  # Measured forward speed [m/s].
-        self.stopped_yaw_rate = 0.04  # Measured turn rate [rad/s].
+        self.stopped_speed = 0.02
+        self.stopped_yaw_rate = 0.04
         self.reset()
 
     def reset(self):
@@ -50,7 +44,7 @@ class HallwayReference:
         }
 
     def reference_at(self, progress):
-        """Sample the two straight legs for plotting (the turn has no length)."""
+
         progress = float(np.clip(progress, 0.0, self.total_length))
         if progress < self.leg_length:
             return self._reference(
@@ -65,12 +59,7 @@ class HallwayReference:
         )
 
     def update(self, pose, velocity):
-        """Advance from pose and measured/estimated (forward speed, yaw rate).
 
-        Wait for braking before turning, and for heading/rate to settle before
-        driving back. The current controller diagnostic supplies simulator truth;
-        the assessed pipeline must supply estimates instead.
-        """
         x, _, heading = pose
         speed, yaw_rate = velocity
         settled = (

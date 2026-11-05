@@ -1,0 +1,17 @@
+{
+  "samples": 152,
+  "valid_samples": 152,
+  "valid_percent": 100.0,
+  "single_tag_samples": 12,
+  "multi_tag_samples": 140,
+  "maximum_tags_used": 5,
+  "frames_using_every_detected_tag": 136,
+  "position_rms_m": 0.009348230710906024,
+  "position_max_m": 0.071826682521215,
+  "heading_rms_deg": 0.19279727393137752,
+  "heading_max_deg": 0.9696439247965811,
+  "mean_reprojection_rms_px": 0.5561943983168248,
+  "failures": [],
+  "evaluation": "Ideal rendered images at route samples, not a noisy EKF consistency test",
+  "covariance": "Uncalibrated approximate joint-PnP covariance; validate before use as EKF R"
+}

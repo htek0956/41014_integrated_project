@@ -1,5 +1,3 @@
-"""Five-segment paperclip reference. Run this file to preview its geometry."""
-
 import math
 
 import numpy as np
@@ -8,11 +6,7 @@ from models import wrap
 
 
 class PaperclipReference:
-    """Straight, large left semicircle, straight, small left semicircle, straight.
 
-    World x/y are metres; headings are counterclockwise radians.
-    Geometry stays here so the preview and robot use the same definition.
-    """
 
     def __init__(self, speed):
         if speed <= 0:
@@ -20,23 +14,22 @@ class PaperclipReference:
 
         self.speed = speed
 
-        # Initial experiment dimensions [m]. Edit these to change the path.
+
         self.first_straight_length = 4
         self.large_radius = 1.5
         self.second_straight_length = 4.0
         self.small_radius = 0.5
         self.final_straight_length = 3.0
 
-        # Start at the previous assignment's nominal pose, facing world +x.
+
         self.start_position = np.array([0.0, -2.0])
         self.start_heading = 0.0
 
-        # Geometric arrival tolerance [m] and reference braking rate [m/s^2].
-        # These are initial choices to validate with the real tracking response.
+
         self.arrival_tolerance = 0.05
         self.deceleration = 0.1
 
-        # Each pair is (length along segment, radius); radius zero means line.
+
         definitions = [
             (self.first_straight_length, 0.0),
             (math.pi * self.large_radius, self.large_radius),
@@ -60,8 +53,7 @@ class PaperclipReference:
             }
             self.segments.append(segment)
 
-            # The next segment starts exactly where this one ends, with the
-            # same tangent heading. Curvature still steps at line/arc joins.
+
             position, heading = self._segment_point(segment, length)
             progress += length
 
@@ -70,12 +62,12 @@ class PaperclipReference:
         self.reset()
 
     def reset(self):
-        """Restart segment progression when beginning a new experiment."""
+
         self.segment_index = 0
         self.finished = False
 
     def _segment_point(self, segment, distance):
-        """Return position and tangent at distance along one segment."""
+
         heading = segment["heading"]
         forward = np.array([math.cos(heading), math.sin(heading)])
         left = np.array([-math.sin(heading), math.cos(heading)])
@@ -85,8 +77,7 @@ class PaperclipReference:
             position = segment["start"] + distance * forward
             return position, heading
 
-        # Same circle geometry as Assignment 3, expressed relative to each
-        # segment's start heading so the two turns can have different radii.
+
         turn_angle = distance / radius
         position = segment["start"] + radius * (
             math.sin(turn_angle) * forward
@@ -95,7 +86,7 @@ class PaperclipReference:
         return position, heading + turn_angle
 
     def _reference(self, segment, distance):
-        """Build the shared reference dictionary from the path geometry."""
+
         position, heading = self._segment_point(segment, distance)
         radius = segment["radius"]
 
@@ -110,11 +101,7 @@ class PaperclipReference:
         }
 
     def reference_at(self, progress):
-        """Return geometry at distance along the path, without changing state.
 
-        Used by the plot and by geometric checks. Runtime update() additionally
-        selects a segment from estimated pose and requests final deceleration.
-        """
         progress = float(np.clip(progress, 0.0, self.total_length))
 
         for segment in self.segments:
@@ -130,7 +117,7 @@ class PaperclipReference:
         return reference
 
     def _project(self, segment, position):
-        """Project onto the active line or semicircle, returning distance [m]."""
+
         heading = segment["heading"]
         forward = np.array([math.cos(heading), math.sin(heading)])
         left = np.array([-math.sin(heading), math.cos(heading)])
@@ -140,13 +127,12 @@ class PaperclipReference:
         if radius == 0:
             distance = float(offset @ forward)
         else:
-            # Centre is one radius left of the starting tangent. atan2 gives
-            # angle from the start radius, increasing through this left turn.
+
+
             from_centre = offset - radius * left
             turn_angle = math.atan2(from_centre @ forward, -from_centre @ left)
 
-            # Near the end, atan2 may wrap +pi to -pi after a small overshoot.
-            # Near the start, small negative angles should instead clamp to 0.
+
             if turn_angle < -math.pi / 2:
                 turn_angle += 2 * math.pi
 
@@ -155,11 +141,7 @@ class PaperclipReference:
         return float(np.clip(distance, 0.0, segment["length"]))
 
     def update(self, pose):
-        """Return the active reference using estimated (x, y, heading).
 
-        Advance in order when close to each join, avoiding jumps to a nearby
-        parallel straight. Call reset() before replaying another experiment.
-        """
         position = np.asarray(pose[:2], dtype=float)
 
         segment = self.segments[self.segment_index]
@@ -176,8 +158,8 @@ class PaperclipReference:
         reference = self._reference(segment, distance)
 
         if self.segment_index == len(self.segments) - 1:
-            # v^2 = 2*a*d gives a speed envelope approaching the final stop.
-            # Actual stopping still depends on the tracker and wheel response.
+
+
             remaining = segment["length"] - distance
             reference["speed"] = min(
                 self.speed, math.sqrt(2 * self.deceleration * remaining)
@@ -190,10 +172,10 @@ class PaperclipReference:
 
 
 def main():
-    """Plot points sampled from exactly the geometry used by update()."""
+
     import matplotlib.pyplot as plt
 
-    # Speed does not affect plotted geometry; this is only a preview value.
+
     path = PaperclipReference(speed=0.2)
     figure, axis = plt.subplots(figsize=(10, 5))
 
@@ -206,7 +188,7 @@ def main():
     ]
 
     for segment, label in zip(path.segments, labels):
-        # Sample roughly every 0.1 m. Include each join explicitly.
+
         count = max(2, math.ceil(segment["length"] / 0.1) + 1)
         distances = np.linspace(0.0, segment["length"], count)
         points = np.array([
@@ -215,7 +197,7 @@ def main():
         ])
         axis.plot(points[:, 0], points[:, 1], ".-", markersize=3, label=label)
 
-        # Direction arrow at the middle of each segment.
+
         position, heading = path._segment_point(segment, segment["length"] / 2)
         axis.arrow(
             *position,

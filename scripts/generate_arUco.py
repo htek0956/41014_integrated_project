@@ -5,19 +5,19 @@ from pathlib import Path
 NUM_MARKERS = 30
 PIXELS = 200
 
-# One directory above this script's folder.
+
 output_folder = Path(__file__).resolve().parent.parent / "assets" / "markers"
 output_folder.mkdir(parents=True, exist_ok=True)
- 
-# Load the predefined dictionary
+
+
 dictionary = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_50)
 
 for i in range(NUM_MARKERS):
-    # Generate the marker
-    
+
+
     marker_image = cv.aruco.generateImageMarker(dictionary, i, PIXELS)
 
     filename = output_folder / f"{i}.png"
- 
+
     if not cv.imwrite(str(filename), marker_image):
         raise OSError(f"Could not save {filename}")

@@ -1,5 +1,3 @@
-"""Arc-model diagnostics; simulator truth is used only for evaluation."""
-
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -10,12 +8,7 @@ else:
 
 
 def integrate_arc(distance, heading_change, initial_pose):
-    """Propagate planar pose from interval travel and turn, in metres/radians.
 
-    The exact constant-curvature step also handles straight motion. np.sinc
-    uses pi-scaled arguments, so sinc(dtheta / (2*pi)) means sin(dtheta/2)
-    divided by dtheta/2, with a safe limit of one at zero turn.
-    """
     pose = np.empty((len(distance) + 1, 3))
     pose[0] = initial_pose
     for index, (travel, turn) in enumerate(zip(distance, heading_change)):
@@ -31,7 +24,7 @@ def integrate_arc(distance, heading_change, initial_pose):
 
 
 def plot_arc_logs(log, wheel_radius, wheel_base, run_index=None):
-    """Plot commanded, encoder-predicted and true arcs; return summary metrics."""
+
     time = np.asarray(log["time"])
     dt = np.diff(time)
     truth = np.column_stack((log["x"], log["y"], np.unwrap(log["heading"])))
@@ -47,8 +40,7 @@ def plot_arc_logs(log, wheel_radius, wheel_base, run_index=None):
         np.asarray(log["right_measured"]) - np.asarray(log["left_measured"])
     ) / wheel_base
 
-    # Each command is held until the next sample. Encoder increments describe
-    # actual wheel travel over that same interval, independent of speed lag.
+
     command = integrate_arc(target_v[:-1] * dt, target_w[:-1] * dt, truth[0])
     left_travel = wheel_radius * np.diff(log["left_angle"])
     right_travel = wheel_radius * np.diff(log["right_angle"])
@@ -77,7 +69,7 @@ def plot_arc_logs(log, wheel_radius, wheel_base, run_index=None):
 
     command_error = np.linalg.norm(command[:, :2] - truth[:, :2], axis=1)
     model_error = np.linalg.norm(encoder[:, :2] - truth[:, :2], axis=1)
-    # Wrapped residuals avoid artificial jumps at the +/-pi boundary.
+
     command_heading_error = np.arctan2(
         np.sin(command[:, 2] - truth[:, 2]), np.cos(command[:, 2] - truth[:, 2])
     )

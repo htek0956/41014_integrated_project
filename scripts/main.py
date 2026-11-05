@@ -1,9 +1,3 @@
-"""Map-planned loop diagnostic using ground-truth feedback, not the EKF.
-
-Run scripts/main.py for the viewer, or add --headless to run without animation.
-Ground truth is deliberately used to isolate controller and actuator behaviour.
-"""
-
 import argparse
 from pathlib import Path
 import time
@@ -13,51 +7,33 @@ import numpy as np
 from controller import Controller, tracking_errors
 from path_planning import map_from_scene, PlannedLoopReference, plot_plan
 from robot import Robot
+from visual_docking import StationDetector, VisualDocking
 import cv2
 
 
-# Experiment settings. Geometry and controller gains stay with their owners.
-# Disable detailed result collection and saved plots/data.
-# The simulation and live camera/viewer windows still run normally.
 LOG_RESULTS = False
 
 
-# Outer tracking-controller interval [s].
-# Initial value from Assignment 3; validate it on this robot.
-# This is not the physics timestep or necessarily the wheel PI interval.
 CONTROL_DT = 0.01
 
 
-# Nominal path speed [m/s]. Start slowly while validating tracking.
-# This is an initial experiment choice, not a measured robot speed limit.
 REFERENCE_SPEED = 0.6
 
 
-# Maximum magnitude of requested body yaw rate [rad/s].
-# Provisional value carried from Assignment 3; validate against wheel limits.
-# The current XML defines torque limits, so this cannot be read from ctrlrange.
-# The robot interface must also limit wheel targets; this bound alone does not
-# guarantee feasible wheel speeds when forward motion and turning are combined.
 OMEGA_MAX = 2
 
 
-# Initial estimator belief, independent of the actual simulation spawn pose.
-# World-frame order: x [m], y [m], heading [rad], positive counterclockwise.
-# Provisional Assignment 3 values, to match the chosen paperclip placement.
 INITIAL_POSE = np.array([0.3, -2.0, np.deg2rad(10.0)])
 
 
-# Initial uncertainty: standard deviations of 0.3 m, 0.3 m and 10 degrees.
-# Diagonal entries are variances; initial cross-covariances are assumed zero.
-# These describe starting uncertainty, not process or camera measurement noise.
 INITIAL_COVARIANCE = np.diag([
     0.3**2,
     0.3**2,
     np.deg2rad(10.0)**2,
 ])
 
-def main(show_viewer=True, max_time=None):
-    """Run the diagnostic; return recorded samples, or None without logging."""
+def main(show_viewer=True, max_time=None, camera_diagnostics=False):
+
     time_since_viewer_update = 0
     scene = (
         Path(__file__).resolve().parent.parent
@@ -70,8 +46,7 @@ def main(show_viewer=True, max_time=None):
     print(f"Ground-truth diagnostic: planned {path.total_length:.1f} m loop from wall map.")
     controller = Controller(REFERENCE_SPEED, CONTROL_DT, verbose=LOG_RESULTS)
 
-    # Allow substantial tracking delay, but do not run forever if a segment
-    # transition or stopping condition is never reached. All times are sim time.
+
     if max_time is None:
         max_time = 5 * path.total_length / REFERENCE_SPEED + 20
 
@@ -85,8 +60,7 @@ def main(show_viewer=True, max_time=None):
             "command", "limited_command",
         )}
 
-        # Keep wheel/effort samples at physics rate, rather than only at LQR rate.
-        # Each row describes the state and newly applied torque before mj_step.
+
         log["wheel"] = {name: [] for name in (
             "time", "target", "measured", "torque", "raw_torque",
             "body_command", "limited_command", "body_measured",
@@ -100,20 +74,33 @@ def main(show_viewer=True, max_time=None):
         ])
 
     robot = Robot(scene, max_yaw_rate=OMEGA_MAX, show_viewer=show_viewer)
+    obstacle_ids = {i for i in range(robot.model.ngeom)
+                    if (robot.model.geom(i).name or '').startswith(('nav_wall_', 'scenery_wall_', 'dock_'))}
+    obstacle_contact_steps = 0
 
     start_pos = path.start_position.copy()
     start_heading = path.start_heading
     plan_figure = None
+    camera_samples = []
 
     try:
         robot.reset((*start_pos, start_heading))
+        detector = StationDetector(robot.model.camera('robot_camera').fovy[0])
+        docking = VisualDocking()
+        docking_start = None
+        next_docking_time = 0.
+        latest_camera = None
 
         if show_viewer:
             import matplotlib.pyplot as plt
 
-            # Display the planned map/reference once, independently of logging.
-            # Non-blocking: keep this figure open alongside the robot windows.
+
             plan_figure = plot_plan(path)
+            truth_marker, = plan_figure.axes[0].plot([], [], '+', color='tab:orange', markersize=12,
+                                                   label='Truth (verification only)')
+            camera_marker, = plan_figure.axes[0].plot([], [], 'o', color='tab:green', markersize=6,
+                                                    label='Camera-only pose')
+            plan_figure.axes[0].legend()
             plan_figure.canvas.manager.set_window_title('Map and planned route')
             plt.show(block=False)
             plan_figure.canvas.draw()
@@ -140,8 +127,7 @@ def main(show_viewer=True, max_time=None):
         next_viewer_time = 0.0
         stop_time = None
 
-        # Pace the viewer against one fixed wall-clock origin. Sleeping once
-        # per physics step would accumulate timing overhead on Windows.
+
         wall_start = time.perf_counter()
 
         if LOG_RESULTS:
@@ -149,15 +135,34 @@ def main(show_viewer=True, max_time=None):
 
         while robot.running() and robot.time < max_time:
             if robot.time + 1e-10 >= next_control_time:
-                # Later the operational pipeline will supply an EKF estimate.
-                # For this diagnostic, both reference and controller use truth.
+
+
                 pose = robot.get_truth()
                 reference = path.update(pose, robot.get_truth_velocity())
 
                 if reference["stop"]:
-                    command = (0.0, 0.0)
-                    if stop_time is None:
+                    if docking_start is None:
+                        docking_start = robot.time
+                        print('Lap complete. Acquiring charging-station marker for visual docking.')
+                    if stop_time is not None:
+                        command = (0., 0.)
+                    elif robot.time-docking_start > 60:
+                        command = (0., 0.)
                         stop_time = robot.time
+                        print('Docking timed out; stopping safely without claiming success.')
+                    elif robot.time + 1e-10 >= next_docking_time:
+
+
+                        latest_camera = robot.read_camera()
+                        observation = detector.observe(latest_camera['rgb'], latest_camera['timestamp'])
+                        enc = robot.read_encoders()
+                        speed = robot.wheel_radius*(enc['left_speed']+enc['right_speed'])/2
+                        yaw = robot.wheel_radius*(enc['right_speed']-enc['left_speed'])/robot.wheel_separation
+                        command = docking.update(observation, speed, yaw)
+                        next_docking_time = robot.time + .05
+                        if docking.finished:
+                            stop_time = robot.time
+                            print('Docking position reached at the physical connector pads (camera-based stop; no contact sensor).')
                 else:
                     command = controller.update(
                         pose, reference, CONTROL_DT
@@ -177,25 +182,50 @@ def main(show_viewer=True, max_time=None):
             else:
                 control_updated = False
 
-            # Inner wheel PI runs every physics step. Hold the outer body
-            # command between LQR updates; apply torque before stepping physics.
+
             limited_command = robot.apply_body_command(command, robot.physics_dt)
             if LOG_RESULTS and control_updated:
                 log["limited_command"].append(limited_command)
 
-            if show_viewer and robot.time - time_since_viewer_update > 0.2:
+            if (show_viewer or camera_diagnostics) and robot.time - time_since_viewer_update > 0.2:
                 camera = robot.read_camera()
-                rgb = camera["rgb"]
-            
-                bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-                cv2.imshow("Robot camera", bgr)
+                measurement = robot.read_camera_pose(camera, annotate=True)
+                rgb = measurement['annotated_rgb']
 
-                # Process window events so the image updates.
-                cv2.waitKey(1)
+
+                comparison_truth = np.asarray(robot.get_truth())
+                camera_samples.append(dict(timestamp=measurement['timestamp'],
+                    pose=None if not measurement['valid'] else measurement['pose'].copy(),
+                    truth=comparison_truth.copy(), ids_used=measurement['ids_used'],
+                    covariance=measurement['covariance']))
+                if show_viewer:
+                    truth_marker.set_data([comparison_truth[0]], [comparison_truth[1]])
+                if measurement['valid']:
+                    estimate = measurement['pose']
+                    position_error = np.linalg.norm(estimate[:2]-comparison_truth[:2])
+                    heading_error = (estimate[2]-comparison_truth[2]+np.pi) % (2*np.pi)-np.pi
+                    comparison = f'TRUTH CHECK ONLY: error {position_error*100:.1f}cm / {np.rad2deg(heading_error):+.2f}deg'
+                    if show_viewer:
+                        camera_marker.set_data([estimate[0]], [estimate[1]])
+                else:
+                    comparison = 'No camera measurement; no stale pose returned'
+                    if show_viewer:
+                        camera_marker.set_data([], [])
+                cv2.rectangle(rgb, (0, rgb.shape[0]-32), (rgb.shape[1], rgb.shape[0]), (20, 20, 20), -1)
+                cv2.putText(rgb, comparison, (8, rgb.shape[0]-12), cv2.FONT_HERSHEY_SIMPLEX,
+                            .45, (255, 255, 255), 1, cv2.LINE_AA)
+                if show_viewer and plt.fignum_exists(plan_figure.number):
+                    plan_figure.canvas.draw_idle()
+
+                bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                if show_viewer:
+                    cv2.imshow("Robot camera", bgr)
+
+
+                if show_viewer:
+                    cv2.waitKey(1)
 
                 time_since_viewer_update = robot.time
-
-
 
 
             if LOG_RESULTS:
@@ -215,12 +245,14 @@ def main(show_viewer=True, max_time=None):
                 wheel_log["body_measured"].append(robot.get_truth_velocity())
 
             robot.step()
+            obstacle_contact_steps += int(any(int(c.geom1) in obstacle_ids or int(c.geom2) in obstacle_ids
+                                               for c in robot.data.contact))
 
             if show_viewer and robot.time >= next_viewer_time:
                 robot.sync_viewer()
                 if plan_figure is not None and plt.fignum_exists(plan_figure.number):
-                    # Service pan/zoom/close events without redrawing the route
-                    # or coupling Matplotlib to the physics/control frequency.
+
+
                     plan_figure.canvas.flush_events()
                 next_viewer_time = robot.time + 1 / 30
 
@@ -230,30 +262,43 @@ def main(show_viewer=True, max_time=None):
                 if remaining_wall_time > 0:
                     time.sleep(remaining_wall_time)
 
-            # Zero speed is a PI target, not an instant physical stop. Continue
-            # simulating for two seconds so braking and settling are observable.
+
             if stop_time is not None and robot.time - stop_time >= 2.0:
                 break
 
-        print(f"Lap completed: {path.finished}; time: {robot.time:.2f} s; "
+        dock_target = robot.model.site('dock_target').pos[:2]
+        dock_error = float(np.linalg.norm(np.asarray(robot.get_truth()[:2])-dock_target))
+        print(f"Lap completed: {path.finished}; docked: {docking.finished}; time: {robot.time:.2f} s; "
               f"progress: {path.progress:.2f}/{path.total_length:.2f} m; "
-              f"endpoint error: {np.linalg.norm(np.asarray(robot.get_truth()[:2])-path.end_position):.3f} m")
+              f"dock error: {dock_error:.3f} m; obstacle-contact steps: {obstacle_contact_steps}")
         if not LOG_RESULTS:
             return None
 
         final_pose = robot.get_truth()
-        endpoint_error = float(np.linalg.norm(
-            np.asarray(final_pose[:2]) - path.end_position
-        ))
 
-        log["completed"] = path.finished
+        dock_target = robot.model.site('dock_target').pos[:2]
+        endpoint_error = float(np.linalg.norm(np.asarray(final_pose[:2])-dock_target))
+
+        log["completed"] = docking.finished
+        log["lap_completed"] = path.finished
+        log["docked"] = docking.finished
+        log["dock_mode"] = docking.mode
+        log["obstacle_contact_steps"] = obstacle_contact_steps
+        log["final_body_velocity"] = robot.get_truth_velocity()
+        log["docking_duration_s"] = None if docking_start is None else robot.time-docking_start
+
+
+        log["docking_camera_rgb"] = None if latest_camera is None else latest_camera['rgb'].copy()
+        log["camera_measurements"] = camera_samples
         log["final_pose"] = final_pose
         log["endpoint_error"] = endpoint_error
         log["stop_time"] = stop_time
         log["duration"] = robot.time
 
-        if path.finished:
-            print("Reached the final path endpoint.")
+        if docking.finished:
+            print("Lap and visual docking completed.")
+        elif path.finished:
+            print("Lap completed, but visual docking did not complete.")
         elif robot.time >= max_time:
             print("Simulation time limit reached before path completion.")
         else:
@@ -264,7 +309,7 @@ def main(show_viewer=True, max_time=None):
 
         if log["cross_track_error"]:
             rms_error = np.sqrt(np.mean(np.square(log["cross_track_error"])))
-            print(f"Cross-track RMS, including startup/stopping: {rms_error:.3f} m")
+            print(f"Reference cross-track RMS, including deliberate docking departure: {rms_error:.3f} m")
 
         return log
 

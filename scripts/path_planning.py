@@ -1,10 +1,3 @@
-"""Ground-truth map -> clearance-weighted A* -> checked smooth loop reference.
-
-This module never reads robot truth. Its map and pose are explicit inputs so
-future LiDAR mapping and estimated pose can replace the diagnostic providers.
-All geometry is world-frame metres, headings CCW radians, curvature 1/metre.
-"""
-
 import argparse
 import heapq
 from pathlib import Path
@@ -18,7 +11,7 @@ DEFAULT_SCENE = Path(__file__).resolve().parents[1] / 'robotis_tb3' / 'scene_loo
 
 
 class OccupancyMap:
-    """Explicit occupancy-grid boundary; later a LiDAR mapper can supply this."""
+
 
     def __init__(self, occupied, origin, resolution, robot_radius=.25, margin=.12):
         self.occupied = np.asarray(occupied, dtype=bool)
@@ -26,7 +19,7 @@ class OccupancyMap:
         self.resolution = float(resolution)
         self.robot_radius = robot_radius
         self.margin = margin
-        # Subtract half a cell diagonal to conservatively account for raster size.
+
         self.clearance = np.maximum(0, distance_transform_edt(~self.occupied)
                                     * resolution - resolution / np.sqrt(2))
         self.safe = self.clearance > robot_radius + margin
@@ -47,11 +40,7 @@ class OccupancyMap:
 
 
 def map_from_scene(scene=DEFAULT_SCENE, resolution=.05):
-    """Rasterise explicitly tagged, static, axis-aligned navigation wall boxes.
 
-    Reject unsupported wall transforms instead of silently building a wrong map.
-    Other model geometry is deliberately outside this initial wall-only mapper.
-    """
     root = ET.parse(scene).getroot()
     walls = []
     for geom in root.findall('./worldbody/geom'):
@@ -76,8 +65,8 @@ def map_from_scene(scene=DEFAULT_SCENE, resolution=.05):
     occupied = np.zeros(xx.shape, dtype=bool)
     for p, s in walls:
         occupied |= (abs(xx-p[0]) <= s[0]+resolution/2) & (abs(yy-p[1]) <= s[1]+resolution/2)
-    # Keep only the enclosed free component containing the start. The exterior
-    # and the inaccessible island must not become candidate driving regions.
+
+
     components, _ = label(~occupied)
     cell = np.rint((start-lower)/resolution).astype(int)
     region = components[cell[1], cell[0]]
@@ -90,11 +79,7 @@ def map_from_scene(scene=DEFAULT_SCENE, resolution=.05):
 
 
 def astar(grid, start, goal, traversable=None):
-    """8-connected A*: Euclidean heuristic, positive clearance cost, no corner cuts.
 
-    A small self-contained implementation avoids a new Toolbox dependency. The
-    occupancy-grid approach follows the course's planning/model separation.
-    """
     safe = grid.safe if traversable is None else traversable
     start, goal = tuple(start), tuple(goal)
     for x, y in (start, goal):
@@ -120,7 +105,7 @@ def astar(grid, start, goal, traversable=None):
                 continue
             if dx and dy and not (safe[y, nx] and safe[ny, x]):
                 continue
-            # Penalise wall proximity so the reference retains tracking room.
+
             step = np.hypot(dx, dy) * grid.resolution * (1 + .8 / grid.clearance[ny, nx]**2)
             candidate = costs[current] + step
             node = (nx, ny)
@@ -132,7 +117,7 @@ def astar(grid, start, goal, traversable=None):
 
 
 class PlannedLoopReference:
-    """One lap with local monotonic progress, curvature speed limits and braking."""
+
 
     def __init__(self, grid, start, speed=.6):
         if speed <= 0:
@@ -140,7 +125,7 @@ class PlannedLoopReference:
         self.grid, self.speed = grid, speed
         self.start_position = np.asarray(start, dtype=float)
         self.end_position = self.start_position.copy()
-        # Determine the local corridor tangent from nearby safe cells (PCA).
+
         ys, xs = np.nonzero(grid.safe)
         points = grid.world(np.column_stack((xs, ys)))
         nearby = points[np.linalg.norm(points-start, axis=1) < 1.2]
@@ -158,14 +143,14 @@ class PlannedLoopReference:
         route = astar(grid, entry, exit, safe)
         route = np.vstack((start, route, start))
         distances = np.r_[0., np.cumsum(np.linalg.norm(np.diff(route, axis=0), axis=1))]
-        # Resample before filtering: sigma is a physical smoothing length, not
-        # an arbitrary number of A* cells. Periodic treatment closes the seam.
+
+
         spacing = .025
         samples = np.arange(0, distances[-1], spacing)
         dense = np.column_stack([np.interp(samples, distances, route[:, j]) for j in (0, 1)])
         for smoothing in (.45, .35, .25, .15):
             smooth = gaussian_filter1d(dense, smoothing/spacing, axis=0, mode='wrap')
-            # Keep task start on the route; it is on a long straight.
+
             smooth[0] = start
             smooth = np.vstack((smooth, smooth[0]))
             s = np.r_[0., np.cumsum(np.linalg.norm(np.diff(smooth, axis=0), axis=1))]
@@ -187,10 +172,10 @@ class PlannedLoopReference:
         point = self.spline(progress)
         d, dd = self.spline(progress, 1), self.spline(progress, 2)
         curvature = float((d[0]*dd[1]-d[1]*dd[0]) / np.linalg.norm(d)**3)
-        # Limit reference yaw rate and lateral acceleration without altering LQR.
+
         speed = min(self.speed, .65/max(abs(curvature), 1e-6),
                     np.sqrt(.25/max(abs(curvature), 1e-6)))
-        # Look ahead for bends so braking starts before the curvature peak.
+
         ahead = np.minimum(progress + np.linspace(0, 1.5, 31), self.total_length)
         ad, add = self.spline(ahead, 1), self.spline(ahead, 2)
         k = abs(ad[:, 0]*add[:, 1]-ad[:, 1]*add[:, 0]) / np.linalg.norm(ad, axis=1)**3
@@ -202,8 +187,8 @@ class PlannedLoopReference:
                     mode='STOP' if self.finished else 'NAVIGATE', stop=self.finished)
 
     def update(self, pose, velocity=None):
-        # Search only a local arc-length window: neighbouring corridor sections
-        # and the coincident finish cannot make the reference skip half a lap.
+
+
         lower = max(0, np.searchsorted(self.sample_s, self.progress-.10))
         upper = min(len(self.sample_s), np.searchsorted(self.sample_s, self.progress+.75)+1)
         index = lower + np.argmin(np.linalg.norm(self.sample_xy[lower:upper]-np.asarray(pose[:2]), axis=1))
