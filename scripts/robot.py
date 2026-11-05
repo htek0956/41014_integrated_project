@@ -77,7 +77,10 @@ class Robot:
 
         # Passive means main retains control of stepping and update timing.
         if show_viewer:
-            self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
+            # Work around corrupted native UI panels on some AMD Windows drivers.
+            self.viewer = mujoco.viewer.launch_passive(
+                self.model, self.data, show_left_ui=False, show_right_ui=False,
+            )
 
             # Follow the robot with the external viewer. This does not change
             # the robot_camera used by read_camera() for localisation images.
@@ -150,9 +153,9 @@ class Robot:
 
     def read_camera(self):
         # Capture at the current simulation state.
-        
+
         self.renderer.update_scene(self.data, camera="robot_camera")
-        rgb = self.renderer.render().copy() 
+        rgb = self.renderer.render().copy()
 
         return {"timestamp": self.time, "rgb": rgb}
 
