@@ -1,4 +1,4 @@
-"""Hallway controller diagnostic using ground-truth feedback, not the EKF.
+"""Map-planned loop diagnostic using ground-truth feedback, not the EKF.
 
 Run scripts/main.py for the viewer, or add --headless to run without animation.
 Ground truth is deliberately used to isolate controller and actuator behaviour.
@@ -11,13 +11,13 @@ import time
 import numpy as np
 
 from controller import Controller, tracking_errors
-from hallway_path import HallwayReference
+from path_planning import map_from_scene, PlannedLoopReference, plot_plan
 from robot import Robot
 import cv2
 
 
 # Experiment settings. Geometry and controller gains stay with their owners.
-# Disable result collection, terminal summaries, and saved plots/data.
+# Disable detailed result collection and saved plots/data.
 # The simulation and live camera/viewer windows still run normally.
 LOG_RESULTS = False
 
@@ -62,16 +62,18 @@ def main(show_viewer=True, max_time=None):
     scene = (
         Path(__file__).resolve().parent.parent
         / "robotis_tb3"
-        / "scene_minimal.xml"
+        / "scene_loop.xml"
     )
 
-    path = HallwayReference(REFERENCE_SPEED)
+    grid, start = map_from_scene(scene)
+    path = PlannedLoopReference(grid, start, REFERENCE_SPEED)
+    print(f"Ground-truth diagnostic: planned {path.total_length:.1f} m loop from wall map.")
     controller = Controller(REFERENCE_SPEED, CONTROL_DT, verbose=LOG_RESULTS)
 
     # Allow substantial tracking delay, but do not run forever if a segment
     # transition or stopping condition is never reached. All times are sim time.
     if max_time is None:
-        max_time = 2 * path.total_length / REFERENCE_SPEED + 10
+        max_time = 5 * path.total_length / REFERENCE_SPEED + 20
 
     if max_time <= 0 or CONTROL_DT <= 0:
         raise ValueError("Run duration and control interval must be positive.")
@@ -101,16 +103,28 @@ def main(show_viewer=True, max_time=None):
 
     start_pos = path.start_position.copy()
     start_heading = path.start_heading
+    plan_figure = None
 
     try:
         robot.reset((*start_pos, start_heading))
+
+        if show_viewer:
+            import matplotlib.pyplot as plt
+
+            # Display the planned map/reference once, independently of logging.
+            # Non-blocking: keep this figure open alongside the robot windows.
+            plan_figure = plot_plan(path)
+            plan_figure.canvas.manager.set_window_title('Map and planned route')
+            plt.show(block=False)
+            plan_figure.canvas.draw()
+            plan_figure.canvas.flush_events()
 
         if LOG_RESULTS:
             log["settings"] = {
                 "control_dt": CONTROL_DT,
                 "physics_dt": robot.physics_dt,
                 "reference_speed": REFERENCE_SPEED,
-                "path": "hallway_out_and_back",
+                "path": "map_planned_loop",
                 "lqr_gain": controller.K_lqr.tolist(),
                 "pi_gains": [
                     {"kp": wheel.kp, "ki": wheel.ki}
@@ -204,6 +218,10 @@ def main(show_viewer=True, max_time=None):
 
             if show_viewer and robot.time >= next_viewer_time:
                 robot.sync_viewer()
+                if plan_figure is not None and plt.fignum_exists(plan_figure.number):
+                    # Service pan/zoom/close events without redrawing the route
+                    # or coupling Matplotlib to the physics/control frequency.
+                    plan_figure.canvas.flush_events()
                 next_viewer_time = robot.time + 1 / 30
 
                 remaining_wall_time = (
@@ -217,6 +235,9 @@ def main(show_viewer=True, max_time=None):
             if stop_time is not None and robot.time - stop_time >= 2.0:
                 break
 
+        print(f"Lap completed: {path.finished}; time: {robot.time:.2f} s; "
+              f"progress: {path.progress:.2f}/{path.total_length:.2f} m; "
+              f"endpoint error: {np.linalg.norm(np.asarray(robot.get_truth()[:2])-path.end_position):.3f} m")
         if not LOG_RESULTS:
             return None
 
@@ -250,6 +271,8 @@ def main(show_viewer=True, max_time=None):
     finally:
         robot.close()
         cv2.destroyAllWindows()
+        if plan_figure is not None:
+            plt.close(plan_figure)
 
 
 if __name__ == "__main__":

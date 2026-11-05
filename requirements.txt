@@ -1,0 +1,8 @@
+# Validated on Windows with Python 3.14.6. Other Python versions are not pinned.
+numpy==2.5.4
+scipy==1.18.1
+mujoco==3.17.0
+opencv-contrib-python==5.0.0.93
+glfw==2.11.0
+matplotlib==3.11.2
+control==0.10.2

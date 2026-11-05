@@ -1,0 +1,16 @@
+{
+  "completed": true,
+  "duration_s": 170.26000000008486,
+  "initial_lateral_offset_m": -0.15,
+  "initial_heading_offset_rad": -0.1,
+  "path_length_m": 95.05234332938039,
+  "endpoint_error_m": 0.03000661929073848,
+  "cross_track_rms_m": 0.011524686011643274,
+  "cross_track_max_m": 0.15829944158582349,
+  "min_centre_clearance_m": 0.5646446609406727,
+  "min_conservative_body_clearance_m": 0.31464466094067267,
+  "wall_contact_physics_steps": 0,
+  "final_forward_speed_m_s": 5.952670554690743e-05,
+  "final_yaw_rate_rad_s": 4.601608527144274e-06,
+  "limited_physics_steps": 275
+}
