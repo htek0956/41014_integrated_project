@@ -1,3 +1,5 @@
+"""Historical controller-only diagnostic using truth feedback, not the assessed pipeline."""
+
 import argparse
 import json
 from pathlib import Path

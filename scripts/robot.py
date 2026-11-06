@@ -1,4 +1,5 @@
 import math
+from collections import deque
 from pathlib import Path
 
 import mujoco
@@ -6,15 +7,58 @@ import mujoco.viewer
 import numpy as np
 
 from wheel_controller import WheelPI
+from models import encoder_angle_measurement
+
+LIDAR_BEAMS = 360
+LIDAR_MIN_RANGE = 0.12
+LIDAR_MAX_RANGE = 3.5
+# LDS-01 specifications: https://emanual.robotis.com/docs/en/platform/turtlebot3/appendix_lds_01/
 
 
 class Robot:
 
 
-    def __init__(self, scene_path, max_yaw_rate, show_viewer=True):
+    def __init__(self, scene_path, max_yaw_rate, show_viewer=True,
+                 physics_dt=None, encoder_dt=None, pi_dt=0.01,
+                 encoder_speed_window=0.02, encoder_counts=4096):
 
         self.model = mujoco.MjModel.from_xml_path(str(scene_path))
+        if physics_dt is not None:
+            if not np.isfinite(physics_dt) or physics_dt <= 0:
+                raise ValueError("Physics interval must be finite and positive.")
+            self.model.opt.timestep = physics_dt
+
+        self.encoder_dt = self.physics_dt if encoder_dt is None else encoder_dt
+        self.pi_dt = pi_dt
+        self.encoder_speed_window = encoder_speed_window
+        self.encoder_counts = encoder_counts
+
+        # Align sensor and PI events with physics steps; the speed window
+        # contains complete encoder intervals. Eleven samples span 20 ms at 2 ms.
+        for name, interval, base_dt in (
+            ("Encoder interval", self.encoder_dt, self.physics_dt),
+            ("PI interval", self.pi_dt, self.physics_dt),
+            ("Speed window", self.encoder_speed_window, self.encoder_dt),
+        ):
+            if (not np.isfinite(interval) or interval < base_dt
+                    or not np.isclose(interval / base_dt, round(interval / base_dt), atol=1e-9, rtol=0)):
+                raise ValueError(f"{name} must be a positive whole multiple of {base_dt} s.")
+        encoder_angle_measurement(0.0, self.encoder_counts)
+        window_intervals = round(self.encoder_speed_window / self.encoder_dt)
+        self.encoder_history = deque(maxlen=window_intervals + 1)
+
         self.data = mujoco.MjData(self.model)
+
+        self.lidar_site = self.model.site("lidar").id
+        self.lidar_body = self.model.body("base").id
+        self.lidar_angles = np.linspace(-np.pi, np.pi, LIDAR_BEAMS, endpoint=False)
+        # Sensor frame: +X forward, +Y left, +Z up. All beams lie in its XY plane.
+        self.lidar_directions = np.column_stack((
+            np.cos(self.lidar_angles), np.sin(self.lidar_angles), np.zeros(LIDAR_BEAMS)))
+        self.lidar_geom_ids = np.empty(LIDAR_BEAMS, dtype=np.int32)
+        self.lidar_ranges = np.empty(LIDAR_BEAMS)
+        self.lidar_rng = np.random.default_rng(42)
+        self.lidar_noise_std = 0.02  # metres; assumed Gaussian noise, could not find a datasheet sigma.
         self.landmark_map_path = Path(scene_path).with_suffix('.landmarks.json')
         self._camera_pose_estimator = None
 
@@ -66,6 +110,7 @@ class Robot:
 
         self.wheel_targets = np.zeros(2)
         self.wheel_torques = np.zeros(2)
+        self.pi_feedback_speed = np.zeros(2)
 
         self.viewer = None
         self.closed = False
@@ -115,9 +160,16 @@ class Robot:
 
         self.wheel_targets[:] = 0.0
         self.wheel_torques[:] = 0.0
+        self.pi_feedback_speed[:] = 0.0
+        self.encoder_history.clear()
+        self.next_encoder_time = 0.0
+        self.next_pi_time = 0.0
+        self.previous_pi_time = None
+        self.pi_updated = False
 
 
         mujoco.mj_forward(self.model, self.data)
+        self._sample_encoders()
 
     def running(self):
 
@@ -127,6 +179,38 @@ class Robot:
 
     def read_encoders(self):
 
+        # Return a copy of the latest sample. Multiple consumers at the same
+        # time must not append duplicate readings or change sensor history.
+        return self.encoder_measurement.copy()
+
+    def _sample_encoders(self):
+
+        if self.time + 1e-10 < self.next_encoder_time:
+            return
+
+        angles = encoder_angle_measurement(
+            self.data.qpos[self.position_indices], self.encoder_counts)
+        self.encoder_history.append((self.time, float(angles[0]), float(angles[1])))
+
+        oldest_time, oldest_left, oldest_right = self.encoder_history[0]
+        elapsed = self.time - oldest_time
+        speeds = np.zeros(2)
+        if elapsed > 0:
+            speeds = (angles - np.array([oldest_left, oldest_right])) / elapsed
+
+        self.encoder_measurement = {
+            "timestamp": self.time,
+            "left_angle": float(angles[0]),
+            "right_angle": float(angles[1]),
+            "left_speed": float(speeds[0]),
+            "right_speed": float(speeds[1]),
+        }
+        self.next_encoder_time += self.encoder_dt
+
+    def read_encoder_truth(self):
+
+        # Ideal joint values for labelled diagnostics only. Operational PI and
+        # EKF feedback must use read_encoders(), which includes quantisation.
         left_position, right_position = self.position_indices
         left_velocity, right_velocity = self.velocity_indices
 
@@ -148,7 +232,28 @@ class Robot:
 
     def read_lidar(self):
 
-        raise NotImplementedError("Read a timestamped LiDAR scan.")
+        # Cast one instantaneous scan from the current sensor mounting pose.
+        origin = self.data.site_xpos[self.lidar_site]
+        rotation = self.data.site_xmat[self.lidar_site].reshape(3, 3)
+        directions_world = self.lidar_directions @ rotation.T
+        mujoco.mj_multiRay(
+            self.model, self.data, origin, directions_world.ravel(),
+            None, True, self.lidar_body, self.lidar_geom_ids, self.lidar_ranges,
+            None, LIDAR_BEAMS, LIDAR_MAX_RANGE)
+
+        # Excluding base removes the chassis/scanner itself. The wheel bodies
+        # are below the scan plane. Include static walls and moving obstacles.
+        ranges = self.lidar_ranges.copy()
+        ranges[(ranges < 0) | (ranges > LIDAR_MAX_RANGE)] = np.inf
+        ranges[ranges < LIDAR_MIN_RANGE] = np.nan
+
+        # Noise affects valid returns only; missing/out-of-range beams stay unchanged.
+        valid = np.isfinite(ranges)
+        ranges[valid] += self.lidar_rng.normal(0.0, self.lidar_noise_std, valid.sum())
+        ranges[valid & ((ranges < LIDAR_MIN_RANGE) | (ranges > LIDAR_MAX_RANGE))] = np.nan
+
+        return dict(timestamp=self.time, angles=self.lidar_angles.copy(), ranges=ranges,
+                    range_min=LIDAR_MIN_RANGE, range_max=LIDAR_MAX_RANGE, frame="lidar")
 
     def read_camera_pose(self, camera_measurement=None, annotate=False):
 
@@ -173,13 +278,21 @@ class Robot:
             measurement['annotated_rgb'] = self._camera_pose_estimator.annotate(frame['rgb'], measurement)
         return measurement
 
-    def apply_body_command(self, command, dt):
+    def apply_body_command(self, command, dt=None):
 
+        # Convenience wrapper for the existing diagnostic scripts.
+        if dt is not None and (not np.isfinite(dt) or dt <= 0):
+            raise ValueError("dt must be finite and positive.")
+        limited_command = self.set_body_command(command)
+        self.update_wheel_pi(self.read_encoders())
+        return limited_command
+
+    def set_body_command(self, command):
+        """Convert body speed/yaw rate to limited wheel-speed targets."""
         forward_speed, yaw_rate = command
 
-        if dt <= 0 or not np.all(np.isfinite([forward_speed, yaw_rate, dt])):
-            raise ValueError("Command and dt must be finite, with dt positive.")
-
+        if not np.all(np.isfinite([forward_speed, yaw_rate])):
+            raise ValueError("Command must be finite.")
         yaw_rate = float(np.clip(
             yaw_rate, -self.max_yaw_rate, self.max_yaw_rate
         ))
@@ -198,17 +311,6 @@ class Robot:
 
         self.wheel_targets[:] = targets
 
-        for wheel, (controller, velocity_index) in enumerate(zip(
-            self.wheel_controllers, self.velocity_indices
-        )):
-            measured_speed = float(self.data.qvel[velocity_index])
-            self.wheel_torques[wheel] = controller.update(
-                targets[wheel], measured_speed, dt
-            )
-
-
-        self.data.ctrl[self.actuators] = self.wheel_torques
-
         limited_speed = self.wheel_radius * (targets[0] + targets[1]) / 2
         limited_yaw_rate = (
             self.wheel_radius * (targets[1] - targets[0])
@@ -216,9 +318,27 @@ class Robot:
         )
         return float(limited_speed), float(limited_yaw_rate)
 
+    def update_wheel_pi(self, encoders):
+        """Run PI when PI_DT is due; hold the last torque between updates."""
+        self.pi_updated = self.time + 1e-10 >= self.next_pi_time
+        if self.pi_updated:
+            self.pi_feedback_speed[:] = [encoders["left_speed"], encoders["right_speed"]]
+            pi_interval = (self.pi_dt if self.previous_pi_time is None
+                           else self.time - self.previous_pi_time)
+            for wheel, controller in enumerate(self.wheel_controllers):
+                self.wheel_torques[wheel] = controller.update(
+                    self.wheel_targets[wheel], self.pi_feedback_speed[wheel], pi_interval)
+
+            self.previous_pi_time = self.time
+            self.next_pi_time = self.time + self.pi_dt
+
+
+        self.data.ctrl[self.actuators] = self.wheel_torques
+
     def step(self):
 
         mujoco.mj_step(self.model, self.data)
+        self._sample_encoders()
 
     def sync_viewer(self):
 

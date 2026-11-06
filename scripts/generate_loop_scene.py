@@ -8,6 +8,18 @@ SCENE = Path(__file__).resolve().parents[1] / 'robotis_tb3' / 'scene_loop.xml'
 
 LAYOUT_SCALE = 0.85
 
+# World coordinates in metres for the open room on the left straight
+# Keep the inner wall position and move only the outer boundary outward
+ROOM_OUTER_X = -2.3
+ROOM_BOTTOM = 0.5
+ROOM_TOP = 6.5
+ROOM_CENTRE = ((ROOM_OUTER_X + .8) / 2, (ROOM_BOTTOM + ROOM_TOP) / 2)
+
+# Separate the two cube centres along the room and leave space at both entrances
+# These points select nearby route samples rather than fixing the cube x coordinates
+ROOM_OBSTACLE_HINTS = ((ROOM_CENTRE[0], ROOM_BOTTOM + 1.5),
+                       (ROOM_CENTRE[0], ROOM_TOP - 1.5))
+
 
 def build_scene(destination=SCENE):
 
@@ -50,6 +62,14 @@ def build_scene(destination=SCENE):
             boundary.append(tuple(point[j] + offset * (normals[0][j] + normals[1][j])
                                   / denominator for j in (0, 1)))
 
+        # The outer boundary ends at the top of the left straight and then travels down
+        # Add a rectangular expansion before closing it back to the bottom corner
+        # The connected wall segments keep the loop enclosed without opening a shortcut
+        if side == 1:
+            outer_x = boundary[-1][0]
+            boundary.extend([(outer_x, ROOM_TOP), (ROOM_OUTER_X, ROOM_TOP),
+                             (ROOM_OUTER_X, ROOM_BOTTOM), (outer_x, ROOM_BOTTOM)])
+
         for i, a in enumerate(boundary):
             b = boundary[(i + 1) % len(boundary)]
             marker_walls.append((a, b, side))
@@ -69,6 +89,12 @@ def build_scene(destination=SCENE):
     add_wall_markers(root, destination, marker_walls)
     ET.indent(root)
     ET.ElementTree(root).write(destination, encoding='unicode')
+
+    # Place two larger cubes on the wall map route after writing the new walls
+    # Their names exclude them from planning so avoidance still has to discover them with LiDAR
+    from add_obstacles import add_route_obstacles
+    add_route_obstacles(ROOM_OBSTACLE_HINTS, size=0.6, scene=destination)
+
     return destination
 
 

@@ -31,7 +31,11 @@
     <geom name="nav_wall_1_10" type="box" pos="6.800000000000001 9.3 0.5" size="3.4 0.05 0.5" rgba=".56 .58 .61 1" />
     <geom name="nav_wall_1_11" type="box" pos="3.45 8.45 0.5" size="0.05 0.9000000000000006 0.5" rgba=".56 .58 .61 1" />
     <geom name="nav_wall_1_12" type="box" pos="1.3250000000000002 7.6 0.5" size="2.175 0.05 0.5" rgba=".56 .58 .61 1" />
-    <geom name="nav_wall_1_13" type="box" pos="-0.8 3.4 0.5" size="0.05 4.25 0.5" rgba=".56 .58 .61 1" />
+    <geom name="nav_wall_1_13" type="box" pos="-0.8 7.05 0.5" size="0.05 0.5999999999999999 0.5" rgba=".56 .58 .61 1" />
+    <geom name="nav_wall_1_14" type="box" pos="-1.5499999999999998 6.5 0.5" size="0.7999999999999999 0.05 0.5" rgba=".56 .58 .61 1" />
+    <geom name="nav_wall_1_15" type="box" pos="-2.3 3.5 0.5" size="0.05 3.05 0.5" rgba=".56 .58 .61 1" />
+    <geom name="nav_wall_1_16" type="box" pos="-1.5499999999999998 0.5 0.5" size="0.7999999999999999 0.05 0.5" rgba=".56 .58 .61 1" />
+    <geom name="nav_wall_1_17" type="box" pos="-0.8 -0.15000000000000002 0.5" size="0.05 0.7000000000000001 0.5" rgba=".56 .58 .61 1" />
     <site name="navigation_start" pos="1.275 0 0.02" size=".02" rgba="0 0 0 0" />
     <geom name="dock_housing" type="box" pos="1.275 -0.73 0.24" size="0.3 0.04 0.24" rgba=".10 .13 .17 1" />
     <geom name="dock_foot" type="box" pos="1.275 -0.7 0.025" size="0.34 0.07 0.025" rgba=".12 .16 .20 1" />
@@ -207,22 +211,32 @@
     <geom name="landmark_81_face" type="box" pos="0.7937500000000002 7.545 0.2" xyaxes="1.0 -0.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_81" />
     <geom name="landmark_82_backing" type="box" pos="-0.2687499999999998 7.548 0.2" xyaxes="1.0 -0.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
     <geom name="landmark_82_face" type="box" pos="-0.2687499999999998 7.545 0.2" xyaxes="1.0 -0.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_82" />
-    <geom name="landmark_83_backing" type="box" pos="-0.748 7.074999999999999 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
-    <geom name="landmark_83_face" type="box" pos="-0.745 7.074999999999999 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_83" />
-    <geom name="landmark_84_backing" type="box" pos="-0.748 6.0249999999999995 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
-    <geom name="landmark_84_face" type="box" pos="-0.745 6.0249999999999995 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_84" />
-    <geom name="landmark_85_backing" type="box" pos="-0.748 4.975 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
-    <geom name="landmark_85_face" type="box" pos="-0.745 4.975 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_85" />
-    <geom name="landmark_86_backing" type="box" pos="-0.748 3.9249999999999994 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
-    <geom name="landmark_86_face" type="box" pos="-0.745 3.9249999999999994 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_86" />
-    <geom name="landmark_87_backing" type="box" pos="-0.748 2.874999999999999 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
-    <geom name="landmark_87_face" type="box" pos="-0.745 2.874999999999999 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_87" />
-    <geom name="landmark_88_backing" type="box" pos="-0.748 1.8249999999999993 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
-    <geom name="landmark_88_face" type="box" pos="-0.745 1.8249999999999993 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_88" />
-    <geom name="landmark_89_backing" type="box" pos="-0.748 0.7749999999999995 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
-    <geom name="landmark_89_face" type="box" pos="-0.745 0.7749999999999995 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_89" />
-    <geom name="landmark_90_backing" type="box" pos="-0.748 -0.27500000000000036 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
-    <geom name="landmark_90_face" type="box" pos="-0.745 -0.27500000000000036 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_90" />
+    <geom name="landmark_83_backing" type="box" pos="-0.748 7.05 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_83_face" type="box" pos="-0.745 7.05 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_83" />
+    <geom name="landmark_84_backing" type="box" pos="-1.175 6.448 0.2" xyaxes="1.0 -0.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_84_face" type="box" pos="-1.175 6.445 0.2" xyaxes="1.0 -0.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_84" />
+    <geom name="landmark_85_backing" type="box" pos="-1.9249999999999998 6.448 0.2" xyaxes="1.0 -0.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_85_face" type="box" pos="-1.9249999999999998 6.445 0.2" xyaxes="1.0 -0.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_85" />
+    <geom name="landmark_86_backing" type="box" pos="-2.2479999999999998 5.9 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_86_face" type="box" pos="-2.2449999999999997 5.9 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_86" />
+    <geom name="landmark_87_backing" type="box" pos="-2.2479999999999998 4.7 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_87_face" type="box" pos="-2.2449999999999997 4.7 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_87" />
+    <geom name="landmark_88_backing" type="box" pos="-2.2479999999999998 3.5 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_88_face" type="box" pos="-2.2449999999999997 3.5 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_88" />
+    <geom name="landmark_89_backing" type="box" pos="-2.2479999999999998 2.3000000000000007 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_89_face" type="box" pos="-2.2449999999999997 2.3000000000000007 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_89" />
+    <geom name="landmark_90_backing" type="box" pos="-2.2479999999999998 1.0999999999999996 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_90_face" type="box" pos="-2.2449999999999997 1.0999999999999996 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_90" />
+    <geom name="landmark_91_backing" type="box" pos="-1.9249999999999998 0.552 0.2" xyaxes="-1.0 -0.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_91_face" type="box" pos="-1.9249999999999998 0.555 0.2" xyaxes="-1.0 -0.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_91" />
+    <geom name="landmark_92_backing" type="box" pos="-1.175 0.552 0.2" xyaxes="-1.0 -0.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_92_face" type="box" pos="-1.175 0.555 0.2" xyaxes="-1.0 -0.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_92" />
+    <geom name="landmark_93_backing" type="box" pos="-0.748 0.175 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_93_face" type="box" pos="-0.745 0.175 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_93" />
+    <geom name="landmark_94_backing" type="box" pos="-0.748 -0.4750000000000001 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".14 .14 .001" contype="0" conaffinity="0" rgba="1 1 1 1" />
+    <geom name="landmark_94_face" type="box" pos="-0.745 -0.4750000000000001 0.2" xyaxes="-0.0 1.0 0.0 0 0 1" size=".10 .10 .0005" contype="0" conaffinity="0" material="landmark_mat_94" />
+    <geom name="obstacle_room_1" type="box" pos="-0.646895 2.055158 0.188698" size="0.188698 0.188698 0.188698" rgba="0.9 0.25 0.1 1" contype="1" conaffinity="1" />
+    <geom name="obstacle_room_2" type="box" pos="-0.539400 4.953838 0.192930" size="0.192930 0.192930 0.192930" rgba="0.9 0.25 0.1 1" contype="1" conaffinity="1" />
   </worldbody>
   <asset>
     <texture name="dock_texture" type="2d" file="../assets/charging_station/dock_0.png" />
@@ -409,5 +423,13 @@
     <material name="landmark_mat_89" texture="landmark_tex_89" texuniform="false" texrepeat="1 1" specular="0" shininess="0" />
     <texture name="landmark_tex_90" type="2d" file="../assets/localisation_markers/90.png" />
     <material name="landmark_mat_90" texture="landmark_tex_90" texuniform="false" texrepeat="1 1" specular="0" shininess="0" />
+    <texture name="landmark_tex_91" type="2d" file="../assets/localisation_markers/91.png" />
+    <material name="landmark_mat_91" texture="landmark_tex_91" texuniform="false" texrepeat="1 1" specular="0" shininess="0" />
+    <texture name="landmark_tex_92" type="2d" file="../assets/localisation_markers/92.png" />
+    <material name="landmark_mat_92" texture="landmark_tex_92" texuniform="false" texrepeat="1 1" specular="0" shininess="0" />
+    <texture name="landmark_tex_93" type="2d" file="../assets/localisation_markers/93.png" />
+    <material name="landmark_mat_93" texture="landmark_tex_93" texuniform="false" texrepeat="1 1" specular="0" shininess="0" />
+    <texture name="landmark_tex_94" type="2d" file="../assets/localisation_markers/94.png" />
+    <material name="landmark_mat_94" texture="landmark_tex_94" texuniform="false" texrepeat="1 1" specular="0" shininess="0" />
   </asset>
 </mujoco>

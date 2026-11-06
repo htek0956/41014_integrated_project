@@ -21,7 +21,7 @@ def controller_metrics(log):
         np.abs(wheel["body_command"] - wheel["limited_command"]) > 1e-9, axis=1
     )
 
-    return {
+    metrics = {
         "completed": bool(log["completed"]),
         "duration_s": float(log["duration"]),
         "endpoint_error_m": float(log["endpoint_error"]),
@@ -36,6 +36,10 @@ def controller_metrics(log):
         "torque_clipped_percent": (100 * np.mean(clipped, axis=0)).tolist(),
         "body_command_limited_percent": float(100 * np.mean(command_limited)),
     }
+    metrics.update({key: log["settings"][key] for key in
+                    ("lap_completed", "docked", "unwanted_contact_steps",
+                     "station_contact_steps", "contact_geoms") if key in log["settings"]})
+    return metrics
 
 
 def plot_controller_results(log, metrics):
@@ -47,7 +51,7 @@ def plot_controller_results(log, metrics):
 
     figure, axes = plt.subplots(2, 2, figsize=(13, 9), layout="constrained")
     figure.suptitle(
-        "Path controller - ground-truth feedback\n"
+        "Path controller - feedback tracking\n"
         f"Reference speed {settings['reference_speed']:g} m/s | "
         f"Control dt {settings['control_dt']:g} s | "
         f"K = {np.array2string(np.asarray(settings['lqr_gain']), precision=3)}"
@@ -55,12 +59,12 @@ def plot_controller_results(log, metrics):
 
     axis = axes[0, 0]
     axis.plot(track[:, 0], track[:, 1], "--", color="black", label="Desired track")
-    axis.plot(poses[:, 0], poses[:, 1], label="Ground-truth motion")
+    axis.plot(poses[:, 0], poses[:, 1], label="Feedback pose")
     axis.scatter(*track[0], color="green", label="Start", zorder=5)
     axis.scatter(*track[-1], color="red", marker="x", label="Desired stop", zorder=5)
     axis.scatter(*log["final_pose"][:2], color="tab:orange", marker="+",
                  label="Final position", zorder=6)
-    axis.set(title="Desired track and actual trajectory", xlabel="World x [m]",
+    axis.set(title="Original route and feedback trajectory", xlabel="World x [m]",
              ylabel="World y [m]")
     axis.set_aspect("equal", adjustable="box")
     axis.legend(fontsize=8)
@@ -75,7 +79,7 @@ def plot_controller_results(log, metrics):
         f"Heading RMS: {metrics['heading_rms_deg']:.3f} deg\n"
         f"Heading max: {metrics['heading_max_abs_deg']:.3f} deg\n"
         f"Body command limited: {metrics['body_command_limited_percent']:.2f} %\n\n"
-        "Metrics include startup and stopping.\n"
+        "Metrics include startup, stopping and docking.\n"
         "Cross-track error excludes along-path stopping error.\n"
         "Dotted vertical line: endpoint stop requested."
     )
@@ -127,39 +131,44 @@ def plot_body_response(log):
     return figure
 
 
-def save_controller_results(log, show=True):
+def save_controller_results(log, show=True, reports=("controller", "body", "pi"),
+                            output_folder=None, close=True):
 
     if not log["time"] or not log["wheel"]["time"]:
         raise ValueError("There are no controller samples to plot.")
 
     metrics = controller_metrics(log)
-    figure = plot_controller_results(log, metrics)
-    body_figure = plot_body_response(log)
-    pi_figure = plot_pi_results(log, metrics)
+    unknown = set(reports) - {"controller", "body", "pi"}
+    if unknown or not reports:
+        raise ValueError("Choose at least one report from controller, body and pi.")
+    figures = []
+    if "controller" in reports:
+        figures.append((plot_controller_results(log, metrics), "controller_overview"))
+    if "body" in reports:
+        figures.append((plot_body_response(log), "body_response"))
+    if "pi" in reports:
+        figures.append((plot_pi_results(log, metrics), "pi_loop"))
 
-    RESULTS_FOLDER.mkdir(parents=True, exist_ok=True)
-    indices = [
-        int(folder.name[4:])
-        for folder in RESULTS_FOLDER.glob("run_*")
-        if folder.is_dir() and folder.name[4:].isdigit()
-    ]
-    index = max(indices, default=0) + 1
+    if output_folder is not None:
+        folder = Path(output_folder)
+        folder.mkdir(parents=True, exist_ok=True)
+        suffix = "full_system"
+    else:
+        RESULTS_FOLDER.mkdir(parents=True, exist_ok=True)
+        index = 1 + max((int(p.name[4:]) for p in RESULTS_FOLDER.glob("run_*")
+                         if p.is_dir() and p.name[4:].isdigit()), default=0)
+        while True:
+            folder = RESULTS_FOLDER / f"run_{index:03d}"
+            try:
+                folder.mkdir()
+                break
+            except FileExistsError:
+                index += 1
+        suffix = f"{index:03d}"
 
-
-    while True:
-        folder = RESULTS_FOLDER / f"run_{index:03d}"
-        try:
-            folder.mkdir()
-            break
-        except FileExistsError:
-            index += 1
-
-    image_path = folder / f"controller_overview_{index:03d}.png"
-    with image_path.open("xb") as output:
-        figure.savefig(output, format="png", dpi=150)
-
-    for report, name in ((body_figure, "body_response"), (pi_figure, "pi_loop")):
-        with (folder / f"{name}_{index:03d}.png").open("xb") as output:
+    image_path = folder / f"{figures[0][1]}_{suffix}.png"
+    for report, name in figures:
+        with (folder / f"{name}_{suffix}.png").open("wb") as output:
             report.savefig(output, format="png", dpi=150)
 
 
@@ -179,21 +188,22 @@ def save_controller_results(log, show=True):
             "stop_time", "final_pose",
         )
     }
+    metadata["metrics"] = metrics
     arrays["metadata"] = np.array(json.dumps(metadata))
-    with (folder / f"run_data_{index:03d}.npz").open("xb") as output:
+    with (folder / f"run_data_{suffix}.npz").open("wb") as output:
         np.savez_compressed(output, **arrays)
 
-    with (folder / f"metrics_{index:03d}.json").open("x", encoding="utf-8") as output:
+    metrics_name = "controller_metrics" if output_folder is not None else "metrics"
+    with (folder / f"{metrics_name}_{suffix}.json").open("w", encoding="utf-8") as output:
         json.dump(metrics, output, indent=2)
 
     print(f"Saved controller results: {folder}")
 
     if show:
         plt.show()
-    else:
-        plt.close(figure)
-        plt.close(body_figure)
-        plt.close(pi_figure)
+    elif close:
+        for figure, _ in figures:
+            plt.close(figure)
 
     return image_path
 
@@ -222,8 +232,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.input is None:
-        from main import main
-        log = main(show_viewer=False)
+        import main as simulation
+        simulation.LOG_RESULTS = True
+        # This script saves its own reports below.
+        log = simulation.main(show_viewer=False, reports=())
     else:
         log = load_controller_results(args.input)
 

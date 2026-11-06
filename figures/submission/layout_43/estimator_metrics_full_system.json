@@ -1,0 +1,31 @@
+{
+  "samples": 10207,
+  "duration_s": 102.05999999994354,
+  "position_rmse_m": 0.007741788349616328,
+  "position_max_error_m": 0.024373271826418578,
+  "position_final_error_m": 0.0016276307556102629,
+  "component_rmse_m_m_rad": [
+    0.00641091039815488,
+    0.004339990174768237,
+    0.011389212677992136
+  ],
+  "component_bias_m_m_rad": [
+    0.0027277003111612482,
+    -0.00026860543009995597,
+    0.001768715132899908
+  ],
+  "heading_rmse_deg": 0.6525538184258387,
+  "heading_max_abs_error_deg": 4.660727896650541,
+  "fraction_inside_2sigma_x_y_heading": [
+    0.9144704614480259,
+    0.9738414813363379,
+    0.9197609483687665
+  ],
+  "invalid_covariance_samples": 0,
+  "camera_frames": 511,
+  "valid_camera_frames": 511,
+  "camera_valid_fraction": 1.0,
+  "mean_nees": 5.492404871581691,
+  "mean_nis": 0.36183795972256116,
+  "consistency_note": "Single-run diagnostics, not proof of consistency; Q/R require validation."
+}

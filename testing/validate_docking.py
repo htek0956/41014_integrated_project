@@ -54,7 +54,7 @@ if __name__ == '__main__':
     assert metrics['docked'] and metrics['lap_completed'], 'Docking did not complete.'
 
 
-    assert metrics['obstacle_contact_steps'] > 0, 'No physical seating contact occurred.'
+    assert result['settings']['unwanted_contact_steps'] == 0, 'Robot contacted a wall or cube.'
     assert metrics['endpoint_error'] < .04, 'Station-relative position error too large.'
     assert abs(metrics['final_body_velocity'][0]) < .015, 'Robot did not stop.'
     assert observation is not None, 'Station marker is not visible from final pose.'

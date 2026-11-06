@@ -1,0 +1,82 @@
+{
+  "ideal": {
+    "wheel_speed_rms_error_rad_s": [
+      0.44068080325634956,
+      0.694399384903957
+    ],
+    "torque_clipped_percent": [
+      0.8181818181818182,
+      1.3636363636363635
+    ],
+    "torque_rms_Nm": [
+      0.10773782830663559,
+      0.11855998040680087
+    ],
+    "true_wheel_tracking_rmse_rad_s": [
+      0.44068080325634057,
+      0.6943993849039326
+    ],
+    "angle_error_max_abs_rad": [
+      0.0007668552847361167,
+      0.0007667839893024109
+    ],
+    "angle_error_sd_rad": [
+      0.0004193776493091159,
+      0.00041738011099018603
+    ],
+    "speed_measurement_error_rmse_rad_s": [
+      0.2539174451446537,
+      0.2634664669755841
+    ],
+    "feedback_speed_measurement_error_rmse_rad_s": [
+      0.0,
+      0.0
+    ],
+    "angle_per_count_rad": 0.0015339807878856412,
+    "velocity_step_rad_s": 0.7669903939428205,
+    "odometry_ideal_position_rmse_m": 0.0010910929515018737,
+    "odometry_ideal_heading_rmse_deg": 0.1183371705141426,
+    "odometry_quantised_position_rmse_m": 0.0010910574662765134,
+    "odometry_quantised_heading_rmse_deg": 0.11836211295961709
+  },
+  "quantised": {
+    "wheel_speed_rms_error_rad_s": [
+      0.508489384387333,
+      0.7417153587064271
+    ],
+    "torque_clipped_percent": [
+      0.7090909090909091,
+      1.3272727272727274
+    ],
+    "torque_rms_Nm": [
+      0.12523773559911036,
+      0.1355865659661326
+    ],
+    "true_wheel_tracking_rmse_rad_s": [
+      0.43950744841152695,
+      0.6933153869130558
+    ],
+    "angle_error_max_abs_rad": [
+      0.0007668835524568263,
+      0.0007669833205949939
+    ],
+    "angle_error_sd_rad": [
+      0.00041913866097793064,
+      0.0004204899995386983
+    ],
+    "speed_measurement_error_rmse_rad_s": [
+      0.25024147311889633,
+      0.2595688955152788
+    ],
+    "feedback_speed_measurement_error_rmse_rad_s": [
+      0.25024147311889633,
+      0.2595688955152788
+    ],
+    "angle_per_count_rad": 0.0015339807878856412,
+    "velocity_step_rad_s": 0.7669903939428205,
+    "odometry_ideal_position_rmse_m": 0.0010962769242824893,
+    "odometry_ideal_heading_rmse_deg": 0.12042836129513106,
+    "odometry_quantised_position_rmse_m": 0.0010960373025254483,
+    "odometry_quantised_heading_rmse_deg": 0.12054331541952194
+  }
+}

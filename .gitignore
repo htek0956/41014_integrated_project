@@ -131,3 +131,31 @@ marimo/_lsp/
 __marimo__/
 
 .streamlit/secrets.toml
+
+# Local editor settings and operating-system files.
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Extra local environments and private environment settings.
+.venv-*/
+.venv_*/
+.env.*
+!.env.example
+!.env.sample
+
+# Temporary editor files and backups.
+*.tmp
+*.swp
+*.swo
+*~
+
+# Local preparation folders, if copied inside this repository.
+/submission_check_env/
+/submission_cleanup_archive/
+/recordings/
+
+# Keep figures/, submission/video_assets/, JSON metrics and NPZ run data:
+# these are the project-page assets and reproducible assessment evidence.

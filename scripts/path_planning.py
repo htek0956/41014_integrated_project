@@ -20,9 +20,29 @@ class OccupancyMap:
         self.robot_radius = robot_radius
         self.margin = margin
 
+        self.update_clearance()
+
+
+    def update_clearance(self):
+
+        # Recompute inflation after adding detected obstacles using the existing footprint and margin
+        # Subtract half the cell diagonal so clearance accounts for the area of an occupied cell
         self.clearance = np.maximum(0, distance_transform_edt(~self.occupied)
-                                    * resolution - resolution / np.sqrt(2))
-        self.safe = self.clearance > robot_radius + margin
+                                    * self.resolution - self.resolution / np.sqrt(2))
+        self.safe = self.clearance > self.robot_radius + self.margin
+
+
+    def add_obstacles(self, points):
+        """Keep supplied world x and y hit cells occupied for the rest of the run"""
+
+        # Ignore points outside the existing map rather than clipping them onto its boundary
+        cells = self.cells(points)
+        x, y = cells[:, 0], cells[:, 1]
+        valid = (x >= 0) & (y >= 0) & (x < self.occupied.shape[1]) & (y < self.occupied.shape[0])
+
+        # Only add occupied cells and never clear old detections or mark unseen space as free
+        self.occupied[y[valid], x[valid]] = True
+        self.update_clearance()
 
     def cells(self, points):
         return np.rint((np.asarray(points) - self.origin) / self.resolution).astype(int)
@@ -195,6 +215,129 @@ class PlannedLoopReference:
         self.progress = max(self.progress, float(self.sample_s[index]))
         if self.total_length-self.progress < .04 and np.linalg.norm(np.asarray(pose[:2])-self.end_position) < .06:
             self.finished = True
+        return self.reference_at(self.progress)
+
+
+class OpenPathReference:
+    """Provide an LQR reference for an open detour with a moving rejoin"""
+
+    def __init__(self, grid, route, end_heading, speed, end_speed):
+
+        # Route points are world x and y positions in metres
+        # Navigation will supply the exact stopped position and rejoin position as endpoints
+        route = np.asarray(route, dtype=float)
+        if route.ndim != 2 or route.shape[1] != 2 or len(route) < 2:
+            raise ValueError('Detour needs at least two world x and y points')
+        if not np.all(np.isfinite(route)) or not np.isfinite(end_heading):
+            raise ValueError('Detour points and end heading must be finite')
+        if not (np.isfinite(speed) and np.isfinite(end_speed) and 0 < end_speed <= speed):
+            raise ValueError('Detour speeds must satisfy zero < end speed <= speed')
+
+        # Repeated neighbours can occur when exact endpoints are added to an A star route
+        # Remove them because spline distances must increase strictly
+        lengths = np.linalg.norm(np.diff(route, axis=0), axis=1)
+        route = route[np.r_[True, lengths > 0]]
+        if len(route) < 2 or np.linalg.norm(route[-1] - route[0]) == 0:
+            raise ValueError('Detour needs distinct start and end positions')
+
+        self.grid = grid
+        self.speed = float(speed)
+        self.end_speed = float(end_speed)
+        self.start_position = route[0].copy()
+        self.end_position = route[-1].copy()
+
+        # Reuse the loop reference sampling distance and smoothing choices
+        spacing = .025
+        distances = np.r_[0., np.cumsum(np.linalg.norm(np.diff(route, axis=0), axis=1))]
+        samples = np.linspace(0, distances[-1], max(2, int(np.ceil(distances[-1] / spacing)) + 1))
+        sample_spacing = samples[1] - samples[0]
+        dense = np.column_stack([np.interp(samples, distances, route[:, j]) for j in (0, 1)])
+
+        # Heading is in world radians and its unit tangent points along the original route
+        end_tangent = np.array([np.cos(end_heading), np.sin(end_heading)])
+
+        for smoothing in (.45, .35, .25, .15):
+
+            # Nearest padding keeps the two ends separate rather than wrapping into a loop
+            smooth = gaussian_filter1d(dense, smoothing / sample_spacing, axis=0, mode='nearest')
+            smooth[0] = self.start_position
+            smooth[-1] = self.end_position
+
+            lengths = np.linalg.norm(np.diff(smooth, axis=0), axis=1)
+            if np.any(lengths <= 0):
+                continue
+            s = np.r_[0., np.cumsum(lengths)]
+
+            # Zero second derivative at the start leaves its heading free
+            # Fix only the end tangent so the detour joins the original route heading
+            spline = CubicSpline(s, smooth, bc_type=((2, np.zeros(2)), (1, end_tangent)))
+
+            # Check the actual curve because smoothing can cut across an inflated obstacle
+            # Reuse the loop check spacing of at most one centimetre along the path parameter
+            check_s = np.linspace(0, s[-1], max(2, int(np.ceil(s[-1] / .01)) + 1))
+            clear = grid.clearances(spline(check_s)) > grid.robot_radius + grid.margin
+
+            # A vanishing tangent would make heading and curvature undefined
+            tangents = np.linalg.norm(spline(check_s, 1), axis=1)
+            if np.all(clear) and np.all(tangents > 1e-9):
+                break
+        else:
+            raise ValueError('Cannot smooth detour while preserving clearance and a valid tangent')
+
+        self.spline = spline
+        self.total_length = float(s[-1])
+        self.sample_s = np.linspace(0, self.total_length, max(2, int(np.ceil(self.total_length / spacing)) + 1))
+        self.sample_xy = spline(self.sample_s)
+        self.progress = 0.
+        self.finished = False
+        self.start_heading = self.reference_at(0)['heading']
+
+
+    def reference_at(self, progress):
+
+        progress = float(np.clip(progress, 0, self.total_length))
+        point = self.spline(progress)
+        d = self.spline(progress, 1)
+        dd = self.spline(progress, 2)
+        curvature = float((d[0] * dd[1] - d[1] * dd[0]) / np.linalg.norm(d)**3)
+
+        # Reuse the loop yaw limit and lateral acceleration limit to slow before bends
+        # Speed is metres per second and curvature is inverse metres
+        ahead = np.minimum(progress + np.linspace(0, 1.5, 31), self.total_length)
+        ad = self.spline(ahead, 1)
+        add = self.spline(ahead, 2)
+        k = abs(ad[:, 0] * add[:, 1] - ad[:, 1] * add[:, 0]) / np.linalg.norm(ad, axis=1)**3
+        limits = np.minimum(self.speed, np.minimum(.65 / np.maximum(k, 1e-6),
+                                                 np.sqrt(.25 / np.maximum(k, 1e-6))))
+        speed = float(np.min(np.sqrt(limits**2 + 2 * .25 * (ahead - progress))))
+
+        # Brake towards the supplied rejoin speed instead of braking towards zero
+        # Curvature limits may require a lower speed than the requested rejoin speed
+        remaining = self.total_length - progress
+        speed = min(speed, np.sqrt(self.end_speed**2 + 2 * .25 * remaining))
+
+        # Finished means navigation should switch references while the robot keeps moving
+        # Keep stop false because detour completion must not request braking or docking
+        return dict(x=float(point[0]), y=float(point[1]),
+                    heading=float(np.arctan2(d[1], d[0])), curvature=curvature,
+                    progress=progress, speed=float(speed), mode='NAVIGATE', stop=False)
+
+
+    def update(self, pose, velocity=None):
+
+        # Reuse the loop local search window so progress cannot jump to a distant path section
+        # This instance owns only detour progress and never advances the original route
+        lower = max(0, np.searchsorted(self.sample_s, self.progress - .10))
+        upper = min(len(self.sample_s), np.searchsorted(self.sample_s, self.progress + .75) + 1)
+        position = np.asarray(pose[:2])
+        index = lower + np.argmin(np.linalg.norm(self.sample_xy[lower:upper] - position, axis=1))
+        self.progress = max(self.progress, float(self.sample_s[index]))
+
+        # Reuse the loop arrival tolerances without requiring the wheels to stop
+        # Navigation must handle finished before selecting the next tracker reference
+        if self.total_length - self.progress < .04 and np.linalg.norm(position - self.end_position) < .06:
+            self.finished = True
+
         return self.reference_at(self.progress)
 
 
