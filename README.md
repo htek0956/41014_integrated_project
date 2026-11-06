@@ -6,7 +6,7 @@
 |---|---|
 | Group number | 55 |
 | Team members | Harrison Braund; Noah Pereira |
-| Demonstration video | 
+| Demonstration video | [Watch on YouTube (4:43)](https://youtu.be/g12iPoT1V4E) |
 | Source code | [GitHub repository](https://github.com/htek0956/41014_integrated_project) |
 
 ## Project overview
@@ -26,11 +26,7 @@ positioning and stopping at the station; electrical charging is not simulated.
 
 ## Demonstration video
 
-**TODO: insert the video link here when uploaded.**
-
-The [five-minute script and asset list](submission/VIDEO_SCRIPT.md) are prepared.
-Recording and upload remain outstanding. The video must include a current varied
-or disturbed trial as well as nominal navigation, docking and uncertainty plots.
+[Watch the completed demonstration video on YouTube (4:43)](https://youtu.be/g12iPoT1V4E).
 
 ## Installation and running
 
